@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 340
     defaults:
       run:
-        shell: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force C:\logs | Out-Null; Start-Transcript -Append -Path C:\logs\steps.log | Out-Null; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; try { . '{0}' } catch { Write-Host ('::error title=step failed::' + (($_ | Out-String) -replace '\r?\n', '%0A')); throw } finally { Stop-Transcript | Out-Null }"
+        shell: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force C:\logs | Out-Null; Start-Transcript -Append -Path C:\logs\steps.log | Out-Null; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; try {{ . '{0}' }} catch {{ Write-Host ('::error title=step failed::' + (($_ | Out-String) -replace '\r?\n', '%0A')); throw }} finally {{ Stop-Transcript | Out-Null }}"
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
