@@ -169,9 +169,13 @@ jobs:
 
       - name: Prepare Inno Setup
         run: |
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
-          if (-not (Test-Path $iscc)) { throw 'ISCC.exe not found' }
+          # Veyra.iss uses directives from the current Inno Setup release (SetupArchitecture,
+          # dark wizard styles), newer than the runner image's copy.
+          Invoke-WebRequest 'https://jrsoftware.org/download.php/is.exe' -OutFile C:\is.exe
+          $p = Start-Process C:\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/DIR=C:\inno' -Wait -PassThru
+          $iscc = 'C:\inno\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw "Inno Setup install failed (exit $($p.ExitCode))" }
+          (Get-Item $iscc).VersionInfo | Format-List FileVersion, ProductVersion | Out-String | Write-Host
           $lang = Join-Path (Split-Path $iscc) 'Languages'
           foreach ($m in (Select-String -Path scripts/installer/Veyra.iss -Pattern 'compiler:Languages\\([A-Za-z]+\.isl)').Matches) {
             $f = $m.Groups[1].Value
