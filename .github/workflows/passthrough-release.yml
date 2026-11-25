@@ -121,6 +121,19 @@ jobs:
           path: C:\vcache
           key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ env.OVERLAY_HASH }}-v1
 
+      - name: Stage CUDA driver headers (NVIDIA VFG) and ONNX Runtime DirectML headers (RIFE)
+        run: |
+          python -m pip install --quiet --target C:\cuda-hdr nvidia-cuda-runtime-cu12==12.8.90
+          $cuda = 'C:\cuda-hdr\nvidia\cuda_runtime\include'
+          if (-not (Test-Path "$cuda\cuda.h")) { throw 'cuda.h missing' }
+          "CUDA_INC=$cuda" >> $env:GITHUB_ENV
+          foreach ($p in @(@{ id = 'Microsoft.ML.OnnxRuntime.DirectML'; v = '1.24.4'; dir = 'ort' }, @{ id = 'Microsoft.AI.DirectML'; v = '1.15.4'; dir = 'dml' })) {
+            Invoke-WebRequest "https://www.nuget.org/api/v2/package/$($p.id)/$($p.v)" -OutFile "C:\$($p.dir).zip"
+            Expand-Archive "C:\$($p.dir).zip" "C:\ort-dml\$($p.dir)" -Force
+          }
+          if (-not (Test-Path C:\ort-dml\ort\build\native\include\dml_provider_factory.h)) { throw 'ORT DirectML headers missing' }
+          if (-not (Test-Path C:\ort-dml\dml\include\DirectML.h)) { throw 'DirectML headers missing' }
+
       - name: Configure (preset x64-release)
         run: |
           cmake --preset x64-release -B C:\b `
@@ -130,6 +143,8 @@ jobs:
             -DVEYRA_FFMPEG_ROOT=C:/v/installed/x64-windows `
             -DVEYRA_LIBASS_ROOT=C:/v/installed/x64-windows-static `
             -DVEYRA_LIBDOVI_ROOT=C:/dovi `
+            "-DVEYRA_CUDA_DRIVER_INCLUDE_DIR=$env:CUDA_INC" `
+            -DVEYRA_ORT_DML_ROOT=C:/ort-dml `
             "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
 
       - name: Build veyra_qml_ui
