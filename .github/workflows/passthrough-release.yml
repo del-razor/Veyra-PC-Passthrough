@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 340
     defaults:
       run:
-        shell: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force C:\logs | Out-Null; Start-Transcript -Append -Path C:\logs\steps.log | Out-Null; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; try {{ . '{0}' }} catch {{ Write-Host ('::error title=step failed::' + (($_ | Out-String) -replace '\r?\n', '%0A')); throw }} finally {{ Stop-Transcript | Out-Null }}"
+        shell: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force C:\logs | Out-Null; $log = 'C:\logs\step-' + (Get-Date -Format 'HHmmss-fff') + '.log'; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; try {{ . '{0}' *>&1 | Tee-Object -FilePath $log }} catch {{ ($_ | Out-String) | Add-Content $log; Write-Host ('::error title=step failed::' + (($_ | Out-String) -replace '\r?\n', '%0A')); throw }}"
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
@@ -230,10 +230,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
-          foreach ($log in Get-ChildItem C:\logs\*.log -ErrorAction SilentlyContinue) {
-            $tail = (Get-Content $log.FullName | Select-String -Pattern 'error [A-Z]+[0-9]+|FAILED:|fatal error|CMake Error|LNK[0-9]+|Exception|exited with' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'
-            if ($tail) { Write-Host "::error title=$($log.Name)::$tail" }
+          $ErrorActionPreference = 'Continue'
+          New-Item -ItemType Directory -Force C:\logcopy | Out-Null
+          Get-ChildItem C:\logs\*.log | ForEach-Object { Copy-Item $_.FullName C:\logcopy -ErrorAction SilentlyContinue }
+          $steps = Get-ChildItem C:\logcopy\step-*.log | Sort-Object Name
+          $failed = $steps | Select-Object -SkipLast 1 | Select-Object -Last 1
+          if ($failed) {
+            $tail = (Get-Content $failed.FullName | Where-Object { $_ -notmatch '^\*+$|^(Host Application|Process ID|PSVersion|PSEdition|GitCommitId|OS|Platform|PSCompatibleVersions|PSRemotingProtocolVersion|SerializationVersion|WSManStackVersion|Username|RunAs User|Configuration Name|Machine|Start time|End time|PowerShell transcript)' } | Select-Object -Last 25) -join '%0A'
+            Write-Host "::error title=last step output::$tail"
           }
-          Compress-Archive -Path C:\logs\* -DestinationPath C:\ci-logs.zip -Force
-          $tag = "ci-logs-$env:GITHUB_RUN_ID"
-          gh release create $tag C:\ci-logs.zip --draft -t "CI logs $env:GITHUB_RUN_ID" -n "Build logs for a failed run." --target $env:GITHUB_SHA
+          if (Test-Path C:\logcopy\build.log) {
+            $b = (Get-Content C:\logcopy\build.log | Select-String -Pattern 'error [A-Z]+[0-9]+:|FAILED:|fatal error|CMake Error' | Select-Object -Last 20 | ForEach-Object Line) -join '%0A'
+            if ($b) { Write-Host "::error title=build errors::$b" }
+          }
+          Compress-Archive -Path C:\logcopy\* -DestinationPath C:\ci-logs.zip -Force
+          gh release create "ci-logs-$env:GITHUB_RUN_ID" C:\ci-logs.zip --draft -t "CI logs $env:GITHUB_RUN_ID" -n "Build logs for a failed run." --target $env:GITHUB_SHA
