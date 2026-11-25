@@ -168,13 +168,24 @@ jobs:
           Get-ChildItem C:\official | Format-Table Name, Length | Out-String | Write-Host
 
       - name: Prepare Inno Setup
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Veyra.iss uses directives from the current Inno Setup release (SetupArchitecture,
           # dark wizard styles), newer than the runner image's copy.
-          Invoke-WebRequest 'https://jrsoftware.org/download.php/is.exe' -OutFile C:\is.exe
-          $p = Start-Process C:\is.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/DIR=C:\inno' -Wait -PassThru
-          $iscc = 'C:\inno\ISCC.exe'
-          if (-not (Test-Path $iscc)) { throw "Inno Setup install failed (exit $($p.ExitCode))" }
+          $PSNativeCommandUseErrorActionPreference = $false
+          gh release download -R jrsoftware/issrc -p 'innosetup-*.exe' -D C:\is-dl --clobber
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installer = Get-ChildItem C:\is-dl\innosetup-*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($installer) {
+            Write-Host "Installing $($installer.Name)"
+            $p = Start-Process $installer.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/DIR=C:\inno' -Wait -PassThru
+            $iscc = 'C:\inno\ISCC.exe'
+          } else {
+            choco upgrade innosetup -y --no-progress
+            $iscc = Get-ChildItem "${env:ProgramFiles(x86)}\Inno Setup *\ISCC.exe", "$env:ProgramFiles\Inno Setup *\ISCC.exe" -ErrorAction SilentlyContinue | Sort-Object { $_.VersionInfo.FileVersionRaw } | Select-Object -Last 1 -ExpandProperty FullName
+          }
+          if (-not $iscc -or -not (Test-Path $iscc)) { throw 'Inno Setup install failed' }
           (Get-Item $iscc).VersionInfo | Format-List FileVersion, ProductVersion | Out-String | Write-Host
           $lang = Join-Path (Split-Path $iscc) 'Languages'
           foreach ($m in (Select-String -Path scripts/installer/Veyra.iss -Pattern 'compiler:Languages\\([A-Za-z]+\.isl)').Matches) {
