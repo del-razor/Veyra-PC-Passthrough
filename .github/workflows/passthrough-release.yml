@@ -205,7 +205,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force C:\release, C:\work | Out-Null
           foreach ($zip in Get-ChildItem C:\official\*-win64-portable.zip) {
-            python scripts/passthrough/repack.py --official-zip $zip.FullName --build C:\b --output C:\release --iscc $env:ISCC --work C:\work
+            python scripts/passthrough/repack.py --official-zip $zip.FullName --build C:\b --output C:\release --iscc $env:ISCC --work C:\work `
+              --dll-dir C:\dovi\bin --dll-dir "$env:ProgramFiles\OpenSSL\bin" --dll-dir C:\v\installed\x64-windows\bin
           }
           $n = (Get-ChildItem C:\release).Count
           if ($n -lt 4) { throw "expected NVIDIA and AMD zip + setup, got $n files" }

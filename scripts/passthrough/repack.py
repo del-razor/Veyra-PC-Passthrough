@@ -40,8 +40,58 @@ def extract(zip_path, destination):
     return tops[0]
 
 
-def replace_player(version_dir, build):
+def dependents(binary):
+    """DLL names a PE file imports, from MSVC's dumpbin."""
+    out = subprocess.run(["dumpbin", "/nologo", "/dependents", str(binary)], capture_output=True,
+                         text=True, check=True).stdout
+    names, inside = [], False
+    for line in out.splitlines():
+        line = line.strip()
+        if line.startswith("Image has the following"):
+            inside = True
+            continue
+        if inside:
+            if not line:
+                if names:
+                    break
+                continue
+            if line.lower().endswith(".dll"):
+                names.append(line)
+            else:
+                break
+    return names
+
+
+def add_missing_dlls(version_dir, start, dll_dirs):
+    """Copy every DLL the rebuilt player needs that the official package lacks."""
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+    present = {p.name.lower() for p in version_dir.iterdir() if p.is_file()}
+    added, queue, seen = [], [start], set()
+    while queue:
+        binary = queue.pop()
+        for name in dependents(binary):
+            key = name.lower()
+            if key in seen or key.startswith(("api-ms-", "ext-ms-")):
+                continue
+            seen.add(key)
+            if key in present:
+                continue
+            if (system / name).is_file():
+                continue
+            source = next((d / name for d in dll_dirs if (d / name).is_file()), None)
+            if source is None:
+                raise FileNotFoundError(f"{binary.name} needs {name}, which is neither in the package nor in {dll_dirs}")
+            shutil.copy2(source, version_dir / source.name)
+            present.add(key)
+            added.append(source.name)
+            queue.append(version_dir / source.name)
+    print("added DLLs:", ", ".join(added) or "none")
+    return added
+
+
+def replace_player(version_dir, build, dll_dirs):
     shutil.copy2(build / PLAYER, version_dir / PLAYER)
+    added = add_missing_dlls(version_dir, version_dir / PLAYER, [build] + dll_dirs)
     built_qml = build / "qml/Veyra"
     target_qml = version_dir / "qml/Veyra"
     if built_qml.is_dir():
@@ -58,6 +108,9 @@ def replace_player(version_dir, build):
         if row["path"] == PLAYER:
             row = dict(row, size=source.stat().st_size, sha256=digest(source))
         rows.append(row)
+    for name in added:
+        source = version_dir / name
+        rows.append(dict(path=name, size=source.stat().st_size, sha256=digest(source)))
     for source in sorted(target_qml.rglob("*")):
         if source.is_file():
             rows.append(dict(path=source.relative_to(version_dir).as_posix(),
@@ -141,6 +194,8 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--iscc", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument("--dll-dir", type=Path, action="append", default=[],
+                        help="extra folder to take missing runtime DLLs from (repeatable)")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     args.work.mkdir(parents=True, exist_ok=True)
@@ -151,7 +206,7 @@ def main():
     version_dir = top / "versions" / version
     if not (version_dir / PLAYER).is_file():
         raise ValueError(f"{PLAYER} not found in {version_dir}")
-    replace_player(version_dir, args.build)
+    replace_player(version_dir, args.build, args.dll_dir)
     zip_out = args.output / args.official_zip.name
     write_zip(top, zip_out)
     setup = build_setup(top, version, flavor_line.strip(), args.iscc, args.output, args.work)
