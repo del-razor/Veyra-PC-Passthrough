@@ -232,13 +232,29 @@ jobs:
           "@ + (Get-Content C:\upstream-notes.md -Raw)
           $notes | Set-Content -Encoding utf8 C:\notes.md
           $files = Get-ChildItem C:\release | ForEach-Object FullName
-          $PSNativeCommandUseErrorActionPreference = $false
-          $published = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select((.draft | not) and .tag_name == `"$tag`") | .id"
-          if ($published) { throw "$tag is already published; delete it first to rebuild" }
-          $drafts = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.draft and .tag_name == `"$tag`") | .id"
-          foreach ($id in $drafts) { gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$id" | Out-Null }
-          $PSNativeCommandUseErrorActionPreference = $true
-          gh release create $tag @files -F C:\notes.md -t "Veyra $env:VERSION (PC passthrough)" --draft --target $env:GITHUB_SHA
+          $all = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
+          if ($all | Where-Object { -not $_.draft -and $_.tag_name -eq $tag }) { throw "$tag is already published; delete it first to rebuild" }
+          # One draft per tag, so gh's lookup by tag is unambiguous.
+          foreach ($r in @($all | Where-Object { $_.draft -and $_.tag_name -eq $tag })) {
+            gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$($r.id)" | Out-Null; Write-Host "Removed old draft $($r.id)"
+          }
+          $notesJson = @{ tag_name = $tag; target_commitish = $env:GITHUB_SHA; name = "Veyra $env:VERSION (PC passthrough)"; body = (Get-Content C:\notes.md -Raw); draft = $true } | ConvertTo-Json
+          $new = $notesJson | gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases" --input - | ConvertFrom-Json
+          Write-Host "Created draft $($new.id)"
+          foreach ($f in $files) {
+            $done = $false
+            for ($try = 1; $try -le 4 -and -not $done; $try++) {
+              $PSNativeCommandUseErrorActionPreference = $false
+              gh release upload $tag $f --clobber -R $env:GITHUB_REPOSITORY 2>&1 | Out-Null
+              $ok = $LASTEXITCODE -eq 0
+              $PSNativeCommandUseErrorActionPreference = $true
+              $assets = gh api "repos/$env:GITHUB_REPOSITORY/releases/$($new.id)/assets?per_page=100" | ConvertFrom-Json
+              if ($assets | Where-Object { $_.name -eq (Split-Path $f -Leaf) -and $_.state -eq 'uploaded' }) { $done = $true }
+              elseif (-not $ok) { Write-Host "upload of $f failed (try $try)"; Start-Sleep -Seconds (15 * $try) }
+              else { $done = $true }
+            }
+            if (-not $done) { throw "could not upload $f" }
+          }
 
       - name: Publish logs for diagnosis
         if: failure()
