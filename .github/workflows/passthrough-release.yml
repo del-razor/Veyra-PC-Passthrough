@@ -30,11 +30,15 @@ jobs:
     timeout-minutes: 340
     defaults:
       run:
-        shell: pwsh -NoProfile -Command "$ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+        shell: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force C:\logs | Out-Null; Start-Transcript -Append -Path C:\logs\steps.log | Out-Null; $ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; try { . '{0}' } catch { Write-Host ('::error title=step failed::' + (($_ | Out-String) -replace '\r?\n', '%0A')); throw } finally { Stop-Transcript | Out-Null }"
     steps:
       - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
         with:
           persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
 
       - name: Stage pinned SDK headers and import libraries
         run: |
@@ -220,10 +224,16 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           gh release create $tag @files -F C:\notes.md -t "Veyra $env:VERSION (PC passthrough)" --draft --target $env:GITHUB_SHA
 
-      - name: Report the failing log tail
+      - name: Publish logs for diagnosis
         if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           foreach ($log in Get-ChildItem C:\logs\*.log -ErrorAction SilentlyContinue) {
-            $tail = (Get-Content $log.FullName -Tail 120 | Where-Object { $_ -match 'error|fatal|FAILED' } | Select-Object -Last 40) -join '%0A'
+            $tail = (Get-Content $log.FullName | Select-String -Pattern 'error [A-Z]+[0-9]+|FAILED:|fatal error|CMake Error|LNK[0-9]+|Exception|exited with' | Select-Object -Last 30 | ForEach-Object Line) -join '%0A'
             if ($tail) { Write-Host "::error title=$($log.Name)::$tail" }
           }
+          Compress-Archive -Path C:\logs\* -DestinationPath C:\ci-logs.zip -Force
+          $tag = "ci-logs-$env:GITHUB_RUN_ID"
+          gh release create $tag C:\ci-logs.zip --draft -t "CI logs $env:GITHUB_RUN_ID" -n "Build logs for a failed run." --target $env:GITHUB_SHA
