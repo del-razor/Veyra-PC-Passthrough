@@ -2,17 +2,14 @@
   #error Build this installer with scripts/package-windows-installer.py.
 #endif
 
-#define DisplayName "Veyra (" + Flavor + ")"
-#define InstallId "Veyra.Win64." + Flavor
+#define DisplayName "Veyra PLUS (" + Flavor + ")"
+#define InstallId "VeyraPLUS.Win64." + Flavor
 
 [Setup]
 AppId={#InstallId}
 AppName={#DisplayName}
 AppVersion={#AppVersion}
-AppPublisher=Veyra
-AppPublisherURL=https://github.com/Likely7/Veyra-NRVideo
-AppSupportURL=https://github.com/Likely7/Veyra-NRVideo/issues
-AppUpdatesURL=https://github.com/Likely7/Veyra-NRVideo/releases
+AppPublisher=Veyra PLUS
 DefaultDirName={localappdata}\Programs\{#DisplayName}
 DefaultGroupName={#DisplayName}
 PrivilegesRequired=lowest
@@ -20,7 +17,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupArchitecture=x64
 MinVersion=10.0.19041
-SetupMutex=Veyra.Windows.Setup
+SetupMutex=VeyraPLUS.Windows.Setup
 DisableWelcomePage=no
 DisableDirPage=no
 DisableProgramGroupPage=yes
@@ -44,11 +41,11 @@ Compression=lzma2/fast
 SolidCompression=yes
 LZMANumBlockThreads=1
 OutputDir={#OutputDir}
-OutputBaseFilename=Veyra-{#AppVersion}-{#Flavor}-win64-setup
+OutputBaseFilename=Veyra-PLUS-{#AppVersion}-{#Flavor}-win64-setup
 VersionInfoVersion={#AppVersion}.0
-VersionInfoProductName=Veyra
-VersionInfoDescription=Veyra Setup ({#Flavor})
-VersionInfoCompany=Veyra
+VersionInfoProductName=Veyra PLUS
+VersionInfoDescription=Veyra PLUS Setup ({#Flavor})
+VersionInfoCompany=Veyra PLUS
 #ifdef PublisherSigning
 SignTool=publisher
 SignedUninstaller=yes

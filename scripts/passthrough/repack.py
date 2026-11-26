@@ -23,6 +23,7 @@ from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
 PLAYER = "veyra_qml_ui.exe"
+PRODUCT = "Veyra-PLUS"
 MANIFEST = "package-manifest.json"
 
 
@@ -158,7 +159,7 @@ def entry(source, folder, name=None):
 
 def build_setup(top, version, flavor, iscc, output, work):
     directory = Path(tempfile.mkdtemp(prefix="iscc-", dir=work))
-    (directory / "veyra-installation.txt").write_bytes(f"Veyra.Win64.{flavor}".encode("ascii"))
+    (directory / "veyra-installation.txt").write_bytes(f"VeyraPLUS.Win64.{flavor}".encode("ascii"))
     version_dir = rf"\versions\{version}"
     files = [entry(directory / "veyra-installation.txt", ""),
              entry(iscc.parent / "license.txt", version_dir + r"\licenses", "INNO-SETUP.txt")]
@@ -182,7 +183,7 @@ def build_setup(top, version, flavor, iscc, output, work):
     command = [str(iscc), "/Qp"] + [f"/D{k}={str(v).replace('/', os.sep)}" for k, v in defines.items()]
     command.append(str(ROOT / "scripts/installer/Veyra.iss"))
     subprocess.run(command, cwd=directory, check=True, timeout=1800)
-    name = f"Veyra-{version}-{flavor}-win64-setup.exe"
+    name = f"{PRODUCT}-{version}-{flavor}-win64-setup.exe"
     shutil.move(str(out / name), str(output / name))
     return output / name
 
@@ -207,10 +208,15 @@ def main():
     if not (version_dir / PLAYER).is_file():
         raise ValueError(f"{PLAYER} not found in {version_dir}")
     replace_player(version_dir, args.build, args.dll_dir)
-    zip_out = args.output / args.official_zip.name
+    flavor = flavor_line.strip()
+    stem = f"{PRODUCT}-{version}-{flavor}-win64-portable"
+    renamed = top.with_name(stem)
+    top.rename(renamed)
+    top = renamed
+    zip_out = args.output / f"{stem}.zip"
     write_zip(top, zip_out)
-    setup = build_setup(top, version, flavor_line.strip(), args.iscc, args.output, args.work)
-    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor_line.strip(), version=version)))
+    setup = build_setup(top, version, flavor, args.iscc, args.output, args.work)
+    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor, version=version)))
 
 
 if __name__ == "__main__":

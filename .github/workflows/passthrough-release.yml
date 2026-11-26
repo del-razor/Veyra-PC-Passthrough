@@ -1,4 +1,4 @@
-name: Passthrough release
+name: Veyra PLUS release
 
 # Builds this fork's player (veyra_qml_ui.exe + qml/Veyra) and drops it into
 # the official NVIDIA and AMD portable packages of the same upstream version
@@ -219,18 +219,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "v$env:VERSION"
-          $notes = @"
-          Veyra $env:VERSION with the Screen Capture game mode (mouse passthrough for PC / 3D games) kept.
-
-          This is the official Veyra $env:VERSION from [$env:UPSTREAM](https://github.com/$env:UPSTREAM/releases/tag/$tag) with one change: the removal of the legacy mouse passthrough is undone. Everything else in $env:VERSION is unchanged. The NVIDIA and AMD packages are the official packages with the player rebuilt from this repository's ``passthrough`` branch (commit $env:GITHUB_SHA).
-
-          Not included in this player build yet: PS5 Remote Play, Xbox and Moonlight streaming. The installer is not code-signed, and the in-app updater still follows the official releases.
-
-          ---
-          Upstream release notes:
-
-          "@ + (Get-Content C:\upstream-notes.md -Raw)
-          $notes | Set-Content -Encoding utf8 C:\notes.md
+          python scripts/passthrough/release_notes.py --upstream C:\upstream-notes.md --version $env:VERSION --changes PLUS-CHANGES.md --output C:\notes.md
           $files = Get-ChildItem C:\release | ForEach-Object FullName
           $all = gh api "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" | ConvertFrom-Json
           if ($all | Where-Object { -not $_.draft -and $_.tag_name -eq $tag }) { throw "$tag is already published; delete it first to rebuild" }
@@ -238,7 +227,7 @@ jobs:
           foreach ($r in @($all | Where-Object { $_.draft -and $_.tag_name -eq $tag })) {
             gh api -X DELETE "repos/$env:GITHUB_REPOSITORY/releases/$($r.id)" | Out-Null; Write-Host "Removed old draft $($r.id)"
           }
-          $notesJson = @{ tag_name = $tag; target_commitish = $env:GITHUB_SHA; name = "Veyra $env:VERSION (PC passthrough)"; body = (Get-Content C:\notes.md -Raw); draft = $true } | ConvertTo-Json
+          $notesJson = @{ tag_name = $tag; target_commitish = $env:GITHUB_SHA; name = "Veyra PLUS $env:VERSION"; body = (Get-Content C:\notes.md -Raw); draft = $true } | ConvertTo-Json
           $new = $notesJson | gh api -X POST "repos/$env:GITHUB_REPOSITORY/releases" --input - | ConvertFrom-Json
           Write-Host "Created draft $($new.id)"
           foreach ($f in $files) {

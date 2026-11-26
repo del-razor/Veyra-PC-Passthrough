@@ -191,44 +191,7 @@ VPage {
                         }
                     }
                     VGroup {
-                        // 日落 (the default) or the original black-grey 经典 palette.
-                        VRow {
-                            label: qsTr("界面配色")
-                            hint: qsTr("日落：深靛紫底、日落渐变强调色；经典：原来的黑灰配色")
-                            VSeg {
-                                objectName: "set-palette"
-                                options: [{ id: "dusk", label: qsTr("日落") }, { id: "classic", label: qsTr("经典") }]
-                                current: veyra.preferences.palette === "classic" ? "classic" : "dusk"
-                                onPicked: id => veyra.setPreference("palette", id)
-                            }
-                        }
-                        // The dusk palette's intro (DuskIntro.qml); classic has none.
-                        VRow {
-                            visible: Theme.dusk
-                            label: qsTr("启动动画")
-                            hint: qsTr("日落配色下打开软件时播放，单击或按任意键可跳过")
-                            VSwitch {
-                                objectName: "set-intro"
-                                checked: veyra.preferences.introAnimation !== false
-                                onToggled: checked => veyra.setPreference("introAnimation", checked)
-                            }
-                        }
-                        // This saved switch controls future launches. The corner button
-                        // stops only the current launch and leaves this preference intact.
-                        VRow {
-                            label: qsTr("启动音乐")
-                            hint: typeof vyMusic !== "undefined" && vyMusic.available
-                                  ? qsTr("每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次")
-                                  : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
-                            VSwitch {
-                                objectName: "set-intro-music"
-                                checked: veyra.preferences.introMusic !== false
-                                onToggled: checked => {
-                                    veyra.setPreference("introMusic", checked)
-                                    if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()
-                                }
-                            }
-                        }
+                        // Veyra PLUS: classic palette only, no startup intro or music.
                         VRow {
                             label: qsTr("页面切换栏")
                             hint: qsTr("平时隐藏；鼠标碰到窗口顶部时弹下来")
