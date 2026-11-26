@@ -1880,7 +1880,7 @@ VPage {
                      { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
                      { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
                      { sep: true },
-                     { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }])
+                     { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }].filter(Theme.plusSource))
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "network") veyra.openNetworkDialog()

@@ -149,7 +149,7 @@ VPage {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 visible: !Theme.dusk                    // the dusk wordmark says it
-                text: "Veyra NR Video"
+                text: "Veyra PLUS"
                 color: Theme.t1
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH1
@@ -158,6 +158,7 @@ VPage {
             Item {
                 id: sponsorLine
                 objectName: "home-sponsor"
+                visible: !Theme.plusScreenOnly
                 Layout.alignment: Qt.AlignHCenter
                 implicitWidth: sponsorRow.implicitWidth
                 implicitHeight: sponsorRow.implicitHeight
@@ -199,6 +200,7 @@ VPage {
 
         VButton {
             objectName: "home-playlist"
+            visible: !Theme.plusScreenOnly
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("播放列表 · 导入文件夹"); iconName: "list"
             onClicked: veyra.showPlaylist()
@@ -239,7 +241,7 @@ VPage {
                     { glyph: "cast", title: qsTr("PC 串流"), act: "moonlight" },
                     { glyph: "gamepad", title: qsTr("Xbox 串流"), act: "xbox" },
                     { glyph: "monitor", title: qsTr("屏幕捕获"), act: "screen" }
-                ]
+                ].filter(Theme.plusSource)
                 // The layout owns the slot's position, so the card inside it is free to
                 // move its own y for the hover lift (a y set on a layout child is
                 // overwritten); the entrance rise goes on the slot.
@@ -341,6 +343,7 @@ VPage {
 
         VButton {
             objectName: "home-network"
+            visible: !Theme.plusScreenOnly
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("播放地址…")
             iconName: "cast"
@@ -356,7 +359,7 @@ VPage {
             Layout.alignment: Qt.AlignHCenter
             // The last source actually used: capture card, PS5 or screen capture.
             readonly property var last: veyra.lastSource
-            visible: last.kind !== undefined
+            visible: last.kind !== undefined && (!Theme.plusScreenOnly || last.kind === "screen")
             implicitWidth: srcGrid.width
             implicitHeight: 54
             radius: 14
@@ -424,7 +427,7 @@ VPage {
             Layout.preferredWidth: srcGrid.width
             implicitHeight: recent.height
             Layout.preferredHeight: implicitHeight
-            visible: veyra.recentFiles.length > 0
+            visible: veyra.recentFiles.length > 0 && !Theme.plusScreenOnly
             Flow {
                 id: recent
                 anchors.left: parent.left
@@ -501,6 +504,7 @@ VPage {
 
     Row {
         id: guideRow
+        visible: !Theme.plusScreenOnly
         anchors.left: parent.left
         anchors.bottom: parent.bottom
         anchors.margins: 16

@@ -18,6 +18,17 @@ QtObject {
     property string paletteName: "dusk"
     readonly property bool dusk: paletteName !== "classic"
 
+    // --- Veyra PLUS scope -----------------------------------------------------
+    // Veyra PLUS keeps Windows screen capture as its only source. The other ways in
+    // (files, playback address, capture card, PS5 / PC / Xbox streaming) stay in the
+    // code so upstream merges stay simple; every source list passes through this.
+    readonly property bool plusScreenOnly: true
+    function plusSource(o) {
+        if (!plusScreenOnly) return true
+        if (o.sep) return false
+        return o.act === undefined || o.act === "" || o.act === "screen"
+    }
+
     // --- surfaces (app.css .vy) -------------------------------------------
     readonly property color card: dusk ? "#161425" : "#131317"
     readonly property color card2: dusk ? "#1C192C" : "#19191E"

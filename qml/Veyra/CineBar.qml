@@ -553,7 +553,7 @@ Rectangle {
             { label: qsTr("PC 串流"), note: qsTr("Sunshine 主机"), icon: "cast", act: "moonlight" },
             { label: qsTr("Xbox 串流"), note: qsTr("账号登录 · 实验"), icon: "gamepad", act: "xbox" },
             { label: qsTr("屏幕捕获"), note: qsTr("窗口或显示器"), icon: "monitor", act: "screen" }
-        ]
+        ].filter(Theme.plusSource)
         onPicked: (i, o) => {
             switch (o.act) {
             case "file": veyra.openFileDialog(); break

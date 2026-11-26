@@ -465,6 +465,7 @@ Window {
     // Drag and drop opens the file (AppShell WM_DROPFILES).
     DropArea {
         anchors.fill: parent
+        enabled: !Theme.plusScreenOnly
         onDropped: drop => {
             if (!drop.hasUrls || drop.urls.length === 0) return
             drop.accept(Qt.CopyAction)
@@ -905,9 +906,9 @@ Window {
     Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
     Shortcut { sequence: "Up"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
     Shortcut { sequence: "Down"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
-    Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
-    Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
-    Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
+    Shortcut { sequence: "Ctrl+O"; enabled: !Theme.plusScreenOnly; onActivated: veyra.openFileDialog() }
+    Shortcut { sequence: "Ctrl+U"; enabled: !Theme.plusScreenOnly; onActivated: veyra.openNetworkDialog() }
+    Shortcut { sequence: "Ctrl+E"; enabled: !Theme.plusScreenOnly; onActivated: root.page = "exp" }
     Shortcut {
         sequence: veyra.shortcuts.lock
         enabled: root.fullscreen
@@ -1014,6 +1015,7 @@ Window {
         function onNavigate(p) {
             onboarding.close()
             // A dialog key opens the dialog; anything else is a page.
+            if (Theme.plusScreenOnly && (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "export")) return
             if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "translation" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)

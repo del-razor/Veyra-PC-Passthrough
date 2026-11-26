@@ -45,7 +45,7 @@ Item {
         { id: "pro",   icon: "sliders", tip: qsTr("专业模式") },
         { id: "exp",   icon: "upload", tip: qsTr("导出") },
         { id: "set",   icon: "settings", tip: qsTr("设置") }
-    ]
+    ].filter(o => !Theme.plusScreenOnly || o.id !== "exp")
 
     // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
     Item {

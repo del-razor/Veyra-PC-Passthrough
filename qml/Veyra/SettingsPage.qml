@@ -49,13 +49,13 @@ VPage {
         { id: "audio",  label: qsTr("音频"), icon: "vol" },
         { id: "perf",   label: qsTr("性能"), icon: "gauge" },
         { id: "compat", label: qsTr("兼容"), icon: "monitor" },
-        { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad" },
+        { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad", plusHidden: true },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
         { id: "about", label: qsTr("关于"), icon: "info" },
         // The one entry with a coloured icon, so it can be found.
         { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
-    ]
+    ].filter(o => !Theme.plusScreenOnly || !o.plusHidden)
 
     // --- nav ---------------------------------------------------------------
     Rectangle {
@@ -390,6 +390,7 @@ VPage {
                     }
                     VGroup {
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("解码")
                             hint: (veyra.preferences.decode || "auto") === "hardware"
                                   ? qsTr("强制硬解 = 只用硬件解码，打不开时报错不回退；下次打开文件生效")
@@ -407,12 +408,14 @@ VPage {
                             VSeg { options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
                         }
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("自动去隔行")
                             hint: veyra.deinterlaceAvailable ? qsTr("只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。") : qsTr("当前软件包未包含去隔行组件")
                             VSwitch { enabled: veyra.deinterlaceAvailable; checked: veyra.preferences.deinterlace !== false; onToggled: checked => veyra.setPreference("deinterlace",checked) }
                         }
                         // Network / server playback (#48). Read when a source opens.
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("网络缓冲")
                             hint: qsTr("网络地址、直播与服务器视频先攒一段再播放；服务器速度低于视频码率时暂停缓冲并说明原因，不会报错黑屏。下次打开网络视频生效")
                             VSeg {
@@ -424,6 +427,7 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("起播预缓冲")
                             hint: qsTr("开始播放前先攒够的秒数；“跟随缓冲档”按上面的缓冲档位决定。下次打开网络视频生效")
                             VSelect {
@@ -438,6 +442,7 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("断线自动重连")
                             hint: qsTr("网络中断后自动重连：点播从断点继续，直播重新连接；关闭后断线即停止。下次打开网络视频生效")
                             VSwitch {
@@ -447,6 +452,7 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: !Theme.plusScreenOnly
                             label: qsTr("损坏画面处理")
                             hint: (veyra.preferences.networkCorrupt || "conceal") === "keyframe"
                                   ? qsTr("等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效")
