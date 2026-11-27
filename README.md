@@ -37,7 +37,7 @@ GPU:
 | AMD | `OverRez-<version>-AMD-win64-setup.exe` | `OverRez-<version>-AMD-win64-portable.zip` |
 
 Requires Windows 11 x64 and DirectX 12. Unzip the portable package into a writable folder and
-run **Veyra.exe**. `SHA256SUMS.txt` lists the checksum of every download. The installers are
+run **OverRez.exe**. `SHA256SUMS.txt` lists the checksum of every download. The installers are
 not code-signed yet.
 
 ## How releases are made
