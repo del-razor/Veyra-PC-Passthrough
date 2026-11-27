@@ -169,6 +169,346 @@ class QmlPlayerBridge : public QObject {
     // Extra space the shell keeps free at the bottom (fullscreen controls).
     Q_PROPERTY(int subtitleBottomInset READ subtitleBottomInset WRITE setSubtitleBottomInset NOTIFY subtitlesChanged)
 
+    // Shell preferences that are not enhancement settings: screenshot folder,
+    // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
+    // validated key by key in setPreference(); anything unknown is refused.
+    Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
+    Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
+    Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
+    // The interface language in use after "auto" is resolved;
+    // preferences.language holds the choice itself.
+    Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
+    Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)
+    Q_PROPERTY(QString lastScreenshot READ lastScreenshot NOTIFY preferencesChanged)
+    // Live recording of the processed picture: the engine owns the encoder and
+    // the file, the interface shows the state and starts or stops it.
+    Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool virtualCameraEnabled READ virtualCameraEnabled NOTIFY virtualCameraChanged)
+    Q_PROPERTY(QVariantMap virtualCameraState READ virtualCameraState NOTIFY virtualCameraChanged)
+    Q_PROPERTY(int virtualCameraFps READ virtualCameraFps NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap recordingState READ recordingState NOTIFY recordingChanged)
+    Q_PROPERTY(QString recordingDirectory READ recordingDirectory NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
+    // Microphone (#101): mixed into the recorded sound, or on a track of its own.
+    Q_PROPERTY(bool recordingMicrophone READ recordingMicrophone NOTIFY preferencesChanged)
+    Q_PROPERTY(QString recordingMicrophoneId READ recordingMicrophoneId NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingMicrophoneTrack READ recordingMicrophoneTrack NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantList microphoneDevices READ microphoneDevices NOTIFY microphoneDevicesChanged)
+    // Instant replay (#103): while enabled, the last replaySeconds of the
+    // presented picture and sound stay in memory; saveReplay() writes them
+    // next to the recordings.
+    Q_PROPERTY(bool replayEnabled READ replayEnabled NOTIFY preferencesChanged)
+    Q_PROPERTY(int replaySeconds READ replaySeconds NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap replayState READ replayState NOTIFY replayChanged)
+    Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
+    // Rebindable shortcuts: action -> key sequence text (defaults merged in).
+    Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
+    // The interface scale chosen for the next start (0 = follow Windows).
+    Q_PROPERTY(int uiScaleActive READ uiScaleActive CONSTANT)
+    Q_PROPERTY(bool obsGameCaptureActive READ obsGameCaptureActive CONSTANT)
+    // This run draws the interface in software because RivaTuner (RTSS) was running at start
+    // (设置 → 监控软件兼容, main.cpp): its OSD then sits on the video only.
+    Q_PROPERTY(bool overlayCompatActive READ overlayCompatActive CONSTANT)
+    // This run draws the interface in software: 设置 → 界面绘制 (software unless GPU is
+    // chosen) or one of the compatibility rules above (veyra/ui/InterfaceRenderer.h).
+    Q_PROPERTY(bool softwareUiActive READ softwareUiActive CONSTANT)
+    // Audio output (P4-d): the active WASAPI render endpoints by device id, the
+    // stored choice (preferences.audioDevice, empty = system default) and what
+    // the renderer actually opened, including a fallback to the default.
+    Q_PROPERTY(QVariantList audioDevices READ audioDevices NOTIFY audioDevicesChanged)
+    // The GPU the "GPU 占用" orb measures (设置 → 通用与外观): [{id, label}], the first
+    // entry ("", 自动) picks the high-performance (discrete) GPU. Field report
+    // 2026-10-02: the orb used to add the integrated and the discrete GPU together.
+    Q_PROPERTY(QVariantList gpuMonitorChoices READ gpuMonitorChoices CONSTANT)
+    Q_PROPERTY(QString gpuMonitorName READ gpuMonitorName NOTIFY preferencesChanged)
+    // 设置 -> "同时用这块显卡运算" (preference computeOnMonitorGpu): the GPU picked
+    // for monitoring also runs enhancement, frame generation and export.
+    Q_PROPERTY(QString computeGpuHint READ computeGpuHint NOTIFY preferencesChanged)
+    Q_PROPERTY(QString audioOutputStatus READ audioOutputStatus NOTIFY audioDevicesChanged)
+    Q_PROPERTY(bool audioOutputFallback READ audioOutputFallback NOTIFY audioDevicesChanged)
+    Q_PROPERTY(QString logFile READ logFile CONSTANT)
+
+    Q_PROPERTY(QString appName READ appName CONSTANT)
+    Q_PROPERTY(QString version READ version CONSTANT)
+
+    Q_PROPERTY(QString statusText READ statusText NOTIFY snapshotChanged)
+    Q_PROPERTY(bool openingSource READ openingSource NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureEnhancementLoading READ captureEnhancementLoading NOTIFY snapshotChanged)
+    Q_PROPERTY(bool running READ running NOTIFY snapshotChanged)
+    Q_PROPERTY(bool paused READ paused NOTIFY snapshotChanged)
+    Q_PROPERTY(bool failed READ failed NOTIFY snapshotChanged)
+    Q_PROPERTY(bool isImage READ isImage NOTIFY snapshotChanged)
+    Q_PROPERTY(bool isCapture READ isCapture NOTIFY snapshotChanged)
+    Q_PROPERTY(bool hasSource READ hasSource NOTIFY snapshotChanged)
+    Q_PROPERTY(double position READ position NOTIFY snapshotChanged)
+    Q_PROPERTY(double duration READ duration NOTIFY snapshotChanged)
+    Q_PROPERTY(QString positionText READ positionText NOTIFY snapshotChanged)
+
+    Q_PROPERTY(QString sourceName READ sourceName NOTIFY snapshotChanged)
+    Q_PROPERTY(QString sourceSummary READ sourceSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(int sourceWidth READ sourceWidth NOTIFY snapshotChanged)
+    Q_PROPERTY(int sourceHeight READ sourceHeight NOTIFY snapshotChanged)
+    Q_PROPERTY(double sourceFps READ sourceFps NOTIFY snapshotChanged)
+    Q_PROPERTY(int sourceRotation READ sourceRotation NOTIFY snapshotChanged)
+    Q_PROPERTY(int previewRotation READ previewRotation NOTIFY compareChanged)
+    // The film's display aspect, so the window can snap to it in cinema mode
+    // exactly as the prototype's fitAspect() does. 0 when nothing is open.
+    Q_PROPERTY(double sourceAspect READ sourceAspect NOTIFY snapshotChanged)
+    Q_PROPERTY(double previewAspect READ previewAspect NOTIFY compareChanged)
+
+    // --- live performance --------------------------------------------------
+    // Submit FPS only. There is deliberately no "display FPS": the user asked
+    // for it to be left out (MSI Afterburner reads the real panel rate, and a
+    // number we cannot measure must not be shown as if we measured it).
+    Q_PROPERTY(double submitFps READ submitFps NOTIFY snapshotChanged)
+    Q_PROPERTY(bool submitFpsKnown READ submitFpsKnown NOTIFY snapshotChanged)
+    // 1% low of the presents over the last ten seconds (FramePaceWindow).
+    Q_PROPERTY(double submitLowFps READ submitLowFps NOTIFY snapshotChanged)
+    Q_PROPERTY(bool submitLowFpsKnown READ submitLowFpsKnown NOTIFY snapshotChanged)
+    Q_PROPERTY(double lateMs READ lateMs NOTIFY snapshotChanged)
+    Q_PROPERTY(double lateP95Ms READ lateP95Ms NOTIFY snapshotChanged)
+    Q_PROPERTY(QString metricsSummary READ metricsSummary NOTIFY snapshotChanged)
+    Q_PROPERTY(bool nrActive READ nrActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool nrAutoActive READ nrAutoActive NOTIFY snapshotChanged)
+    Q_PROPERTY(int nrAutoPercent READ nrAutoPercent NOTIFY snapshotChanged)
+    Q_PROPERTY(QString nrAutoStatus READ nrAutoStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(bool srActive READ srActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool fgActive READ fgActive NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureRecovering READ captureRecovering NOTIFY snapshotChanged)
+    Q_PROPERTY(double captureFps READ captureFps NOTIFY snapshotChanged)
+    Q_PROPERTY(double captureDropped READ captureDropped NOTIFY snapshotChanged)
+    Q_PROPERTY(QString backendWarning READ backendWarning NOTIFY snapshotChanged)
+
+    // --- settings (what the UI shows) --------------------------------------
+    Q_PROPERTY(bool nrEnabled READ nrEnabled WRITE setNrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int selectedNrLayer READ selectedNrLayer WRITE setSelectedNrLayer NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList nrLayers READ nrLayers NOTIFY nrLayersChanged)
+    // List mode's NR master switch: true while any NR layer is on.
+    Q_PROPERTY(bool nrAnyEnabled READ nrAnyEnabled NOTIFY nrLayersChanged)
+    Q_PROPERTY(bool srEnabled READ srEnabled WRITE setSrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int fgMultiplier READ fgMultiplier WRITE setFgMultiplier NOTIFY settingsChanged)
+    Q_PROPERTY(bool lowLatency READ lowLatency WRITE setLowLatency NOTIFY settingsChanged)
+    Q_PROPERTY(bool nrTemporal READ nrTemporal WRITE setNrTemporal NOTIFY settingsChanged)
+    Q_PROPERTY(double nrHoldStrength READ nrHoldStrength WRITE setNrHoldStrength NOTIFY settingsChanged)
+    Q_PROPERTY(int nrReuseMode READ nrReuseMode WRITE setNrReuseMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool nrReuseActive READ nrReuseActive NOTIFY snapshotChanged)
+    Q_PROPERTY(QString nrReuseStatus READ nrReuseStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(double nrHoldTolerance READ nrHoldTolerance WRITE setNrHoldTolerance NOTIFY settingsChanged)
+    Q_PROPERTY(bool videoHdr READ videoHdr WRITE setVideoHdr NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap videoHdrParams READ videoHdrParams NOTIFY videoHdrParamsChanged)
+    // Spatial anti-aliasing (#53): the list card edits the first instance, created
+    // on first use; node cards edit their own node by chain index.
+    // Beauty nodes of the active chain in chain order (list mode: the group's layers).
+    Q_PROPERTY(QVariantList beautyLayers READ beautyLayers NOTIFY beautyChanged)
+    // The chain's shared face detection: quality, maxFaces, stability.
+    Q_PROPERTY(QVariantMap beautyDetection READ beautyDetection NOTIFY beautyChanged)
+    Q_PROPERTY(QString beautyStatus READ beautyStatus NOTIFY snapshotChanged)
+    Q_PROPERTY(bool beautyAnyEnabled READ beautyAnyEnabled NOTIFY beautyChanged)
+    Q_PROPERTY(bool videoDenoiseEnabled READ videoDenoiseEnabled WRITE setVideoDenoiseEnabled NOTIFY videoDenoiseChanged)
+    Q_PROPERTY(QVariantMap videoDenoiseParams READ videoDenoiseParams NOTIFY videoDenoiseChanged)
+    Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
+    Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
+    // Custom: static HDR output tuning (globals, every field live).
+    Q_PROPERTY(bool hdrCurve READ hdrCurve WRITE setHdrCurve NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrCurveParams READ hdrCurveParams NOTIFY settingsChanged)
+    Q_PROPERTY(bool hdrMetadataEnabled READ hdrMetadataEnabled WRITE setHdrMetadataEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrMetadataParams READ hdrMetadataParams NOTIFY settingsChanged)
+    // One-click tuning presets (see hdrTuningPresets); "custom" when the sliders
+    // no longer match any of them.
+    Q_PROPERTY(QString hdrTuningPreset READ hdrTuningPreset NOTIFY settingsChanged)
+    // One dial for the whole curve (0..200%, 100 = the preset as written) and the
+    // display's own peak brightness (0 = ask the system). Both live next to the
+    // baseline, so moving them never leaves the selected preset.
+    Q_PROPERTY(int hdrCurveStrength READ hdrCurveStrength WRITE setHdrCurveStrength NOTIFY settingsChanged)
+    Q_PROPERTY(int hdrDisplayPeakNits READ hdrDisplayPeakNits WRITE setHdrDisplayPeakNits NOTIFY settingsChanged)
+    // What the system reports about the display, for the peak field's reset button.
+    Q_PROPERTY(QVariantMap hdrDisplayInfo READ hdrDisplayInfo NOTIFY snapshotChanged)
+    // Custom: the source's own HDR numbers (container metadata), the one-click
+    // recommendation derived from them, and the warning that compares the film's
+    // peak with what the curve will actually cap.
+    Q_PROPERTY(QVariantMap hdrSourceInfo READ hdrSourceInfo NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap hdrRecommendation READ hdrRecommendation NOTIFY snapshotChanged)
+    // Custom: whether the running source is SDR. Used only to word the recommendation
+    // row (an SDR source has no HDR metadata, so "no metadata" would be misleading).
+    Q_PROPERTY(bool sourceIsSdr READ sourceIsSdr NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap hdrPeakWarning READ hdrPeakWarning NOTIFY snapshotChanged)
+    // Custom: one remembered curve per display device, so moving the window to the
+    // projector or the TV applies the settings tuned on that device.
+    Q_PROPERTY(int hdrDisplayProfileCount READ hdrDisplayProfileCount NOTIFY preferencesChanged)
+    // Custom: which preset system the panel shows. "legacy" is the original seven
+    // presets, "axes" is content x environment. A UI choice kept in preferences:
+    // both modes write the very same curve, so the saved session is unaffected.
+    Q_PROPERTY(QString hdrPresetMode READ hdrPresetMode WRITE setHdrPresetMode NOTIFY preferencesChanged)
+
+    // Which preset system established the curve in force. Kept apart from hdrPresetMode
+    // on purpose: switching the panel view must not let the other system claim the curve,
+    // so only an actual apply moves this.
+    Q_PROPERTY(QString hdrAppliedFrom READ hdrAppliedFrom WRITE setHdrAppliedFrom NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap hdrAxes READ hdrAxes NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap hdrAxesMatch READ hdrAxesMatch NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap hdrDials READ hdrDials NOTIFY settingsChanged)
+    // Custom: the curve sampled by the same function the shader runs, for the panel
+    // graph (see hdrCurveLuminance).
+    Q_PROPERTY(QVariantMap hdrCurveGraph READ hdrCurveGraph NOTIFY settingsChanged)
+    // Custom: the live coverage measured by the presenter's probe (see the panel's
+    // live meter). Invalid until a probe has completed.
+    Q_PROPERTY(QVariantMap hdrCurveCoverage READ hdrCurveCoverage NOTIFY snapshotChanged)
+    Q_PROPERTY(bool hdrTitleMemory READ hdrTitleMemory WRITE setHdrTitleMemory NOTIFY preferencesChanged)
+    Q_PROPERTY(bool hdrAutoRecommend READ hdrAutoRecommend WRITE setHdrAutoRecommend NOTIFY preferencesChanged)
+    Q_PROPERTY(int hdrTitleCount READ hdrTitleCount NOTIFY preferencesChanged)
+    Q_PROPERTY(int nrStyle READ nrStyle WRITE setNrStyle NOTIFY settingsChanged)
+    Q_PROPERTY(double nrIntensity READ nrIntensity WRITE setNrIntensity NOTIFY settingsChanged)
+    Q_PROPERTY(double nrTone READ nrTone WRITE setNrTone NOTIFY settingsChanged)
+    Q_PROPERTY(double nrStructure READ nrStructure WRITE setNrStructure NOTIFY settingsChanged)
+    Q_PROPERTY(double nrSkin READ nrSkin WRITE setNrSkin NOTIFY settingsChanged)
+    Q_PROPERTY(bool nrAutoMask READ nrAutoMask WRITE setNrAutoMask NOTIFY settingsChanged)
+    Q_PROPERTY(bool nrUiCorrection READ nrUiCorrection WRITE setNrUiCorrection NOTIFY settingsChanged)
+    Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
+    Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
+    // Three-step SR (RTX Video SR). srPrescale: 0 off, 1..4 720p/900p/1080p/1440p,
+    // 150..190 a manual 50..90 %. srOutput: 0 keep the SR result, 1 source size, 2..6 2K/4K/5K/6K/7K.
+    Q_PROPERTY(int srPrescale READ srPrescale WRITE setSrPrescale NOTIFY settingsChanged)
+    Q_PROPERTY(bool dualSrEnabled READ dualSrEnabled WRITE setDualSrEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrTargetIndex READ dualSrTargetIndex WRITE setDualSrTargetIndex NOTIFY settingsChanged)
+    Q_PROPERTY(int dualSrQuality READ dualSrQuality WRITE setDualSrQuality NOTIFY settingsChanged)
+    Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
+    Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
+    Q_PROPERTY(bool exclusionOverlayVisible READ exclusionOverlayVisible WRITE setExclusionOverlayVisible NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap exclusionState READ exclusionState NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap nrStabilizerState READ nrStabilizerState NOTIFY nrStabilizerChanged)
+    Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
+    Q_PROPERTY(int audioOffsetMs READ audioOffsetMs WRITE setAudioOffsetMs NOTIFY settingsChanged)
+    // 1.4.4 声音补偿: 0 自动(软件估算) / 1 手动 / 2 关闭; live sources only.
+    Q_PROPERTY(int audioSyncMode READ audioSyncMode WRITE setAudioSyncMode NOTIFY settingsChanged)
+    Q_PROPERTY(bool audioSyncLive READ audioSyncLive NOTIFY snapshotChanged)
+    Q_PROPERTY(double audioCompensationMs READ audioCompensationMs NOTIFY snapshotChanged)
+    // Performance orbs and the status light (1.4.4 live status dashboard).
+    Q_PROPERTY(double gpuUtilization READ gpuUtilization NOTIFY perfChanged)
+    Q_PROPERTY(bool gpuUtilizationKnown READ gpuUtilizationKnown NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusAction READ runStatusAction NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusHint READ runStatusHint NOTIFY perfChanged)
+    // Live FG output hint ("当前帧率…超出屏幕刷新率，建议降至…"), empty when the
+    // output fits; a suggestion only, the multiplier is never changed.
+    Q_PROPERTY(QString fgDisplayHint READ fgDisplayHint NOTIFY perfChanged)
+    Q_PROPERTY(QStringList runOptions READ runOptions NOTIFY perfChanged)
+    Q_PROPERTY(double effectiveOutputFps READ effectiveOutputFps NOTIFY perfChanged)
+    // Achieved output rate / effective policy target; -1 while unknown.
+    Q_PROPERTY(double outputRateRatio READ outputRateRatio NOTIFY perfChanged)
+    // Frame interval history (ms, newest last) for the frame-time line.
+    Q_PROPERTY(QVariantList frameTimes READ frameTimes NOTIFY perfChanged)
+    // 补帧 / 光流 (design gap A1-A5): motion estimation quality 0 性能 1 平衡 2 质量,
+    // AMD half-resolution flow, content cadence (engine::ContentRate order).
+    Q_PROPERTY(int flowQuality READ flowQuality WRITE setFlowQuality NOTIFY settingsChanged)
+    Q_PROPERTY(bool amdFlowHalf READ amdFlowHalf WRITE setAmdFlowHalf NOTIFY settingsChanged)
+    // 边缘神盾: refined optical-flow motion for XeSS (EnhancementSettings::fgMotionRefine).
+    Q_PROPERTY(bool edgeAegis READ edgeAegis WRITE setEdgeAegis NOTIFY settingsChanged)
+    // DLSS 性能模式: NVIDIA's DLSS-G performance mode (EnhancementSettings::dlssgLite);
+    // available when the package carries its runtime (runtime/experimental/dlssg-lite).
+    Q_PROPERTY(bool dlssgLite READ dlssgLite WRITE setDlssgLite NOTIFY settingsChanged)
+    // VFG 自动调控: EnhancementSettings::vfgAutoRegulate.
+    Q_PROPERTY(bool vfgAutoRegulate READ vfgAutoRegulate WRITE setVfgAutoRegulate NOTIFY settingsChanged)
+    // 自适应倍率 / 帧节奏修复 / HUD 自动锁定 (ported from PushFPS): EnhancementSettings::
+    // fgAdaptive, pacingRepair and hudLock, global controls kept in shell preferences.
+    Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
+    Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
+    Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
+    Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
+    Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
+    Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
+    Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
+    Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
+    Q_PROPERTY(int hdrOutputMode READ hdrOutputMode WRITE setHdrOutputMode NOTIFY settingsChanged)
+    Q_PROPERTY(int fgMotionSource READ fgMotionSource WRITE setFgMotionSource NOTIFY settingsChanged)
+    Q_PROPERTY(int srMotionSource READ srMotionSource WRITE setSrMotionSource NOTIFY settingsChanged)
+    Q_PROPERTY(int nrMotionSource READ nrMotionSource WRITE setNrMotionSource NOTIFY settingsChanged)
+    // Presentation: display sync 0 允许撕裂 1 垂直同步 2 自动; output cap 0 关闭
+    // 1 跟随显示器 2 自定义 (+ fps). Owned by XeSS when presentationOwned.
+    Q_PROPERTY(int displaySync READ displaySync WRITE setDisplaySync NOTIFY presentationChanged)
+    // 可变刷新 switch (persisted with the presentation settings) and the
+    // presenting monitor's VRR level: 0 unknown, 1 the monitor cannot do VRR
+    // (switch greyed), 2 it can but the driver setting is off, 3 possible,
+    // 4 active; vrrHint explains it beside the switch.
+    Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
+    // Explicit per-application driver setup, independent of the presentation switch.
+    Q_PROPERTY(QObject* nvidiaVrrProfile READ nvidiaVrrProfile CONSTANT)
+    Q_PROPERTY(QObject* liveTranslation READ liveTranslation CONSTANT)
+    Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
+    Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
+    // Display state of the shown monitor for the 信号 card: Windows HDR (-1
+    // unknown, 0 off, 1 on), refresh rate (0 unknown) and a short VRR summary.
+    // Everything is read on events only (startup, another monitor, a display
+    // change, the switch turned on); 刷新显示器状态 (recheckDisplay) asks the
+    // driver again, and displayChecking is true until that answer arrives.
+    Q_PROPERTY(int displayHdr READ displayHdr NOTIFY perfChanged)
+    Q_PROPERTY(double displayRefreshHz READ displayRefreshHz NOTIFY perfChanged)
+    Q_PROPERTY(QString vrrSummary READ vrrSummary NOTIFY perfChanged)
+    Q_PROPERTY(bool displayChecking READ displayChecking NOTIFY perfChanged)
+    Q_PROPERTY(int outputRateMode READ outputRateMode WRITE setOutputRateMode NOTIFY presentationChanged)
+    Q_PROPERTY(double outputCustomFps READ outputCustomFps WRITE setOutputCustomFps NOTIFY presentationChanged)
+    Q_PROPERTY(bool presentationOwned READ presentationOwned NOTIFY snapshotChanged)
+    Q_PROPERTY(QString presentationStatus READ presentationStatus NOTIFY snapshotChanged)
+    // 显示: compare 0 增强 1 原画 2 分屏; base false 输入原画 / true 增强前底图;
+    // split 0..1 of the picture. Aspect 0 适应 1 原始 2 填充.
+    Q_PROPERTY(int compareMode READ compareMode WRITE setCompareMode NOTIFY compareChanged)
+    Q_PROPERTY(bool compareBase READ compareBase WRITE setCompareBase NOTIFY compareChanged)
+    Q_PROPERTY(double compareSplit READ compareSplit NOTIFY compareChanged)
+    Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY compareChanged)
+    // Measured audio/video skew of a live source (ms); unknown otherwise.
+    Q_PROPERTY(double audioSkewMs READ audioSkewMs NOTIFY snapshotChanged)
+    Q_PROPERTY(bool audioSkewKnown READ audioSkewKnown NOTIFY snapshotChanged)
+    // 继续上次: {kind: capture|ps5|screen, label, summary}; empty when none.
+    Q_PROPERTY(QVariantMap lastSource READ lastSource NOTIFY preferencesChanged)
+    // P5 (2026-09-29): what is playing, for the page headers.
+    // sourceKind: "" | file | image | capture | ps5 | screen.
+    Q_PROPERTY(QString sourceKind READ sourceKind NOTIFY snapshotChanged)
+    Q_PROPERTY(QString sourceTitle READ sourceTitle NOTIFY snapshotChanged)
+    // "1080p60 · YUY2 · SDR": reported values only.
+    Q_PROPERTY(QString sourceFormatText READ sourceFormatText NOTIFY snapshotChanged)
+    Q_PROPERTY(QString sourceRateText READ sourceRateText NOTIFY snapshotChanged)
+    // 调色 undo / redo / copy / paste for the selected colour layer.
+    Q_PROPERTY(bool colourCanUndo READ colourCanUndo NOTIFY settingsChanged)
+    Q_PROPERTY(bool colourCanRedo READ colourCanRedo NOTIFY settingsChanged)
+    Q_PROPERTY(bool colourCanPaste READ colourCanPaste NOTIFY settingsChanged)
+    // A live source (PS5 / capture) that is still opening: what the picture area
+    // says meanwhile ("" once it plays or when nothing is opening).
+    Q_PROPERTY(QString liveOpeningText READ liveOpeningText NOTIFY snapshotChanged)
+    // Protection regions as the engine holds them: [{left,top,right,bottom,ellipse}].
+    Q_PROPERTY(QVariantList protectionRegions READ protectionRegions NOTIFY protectionChanged)
+    Q_PROPERTY(QString protectionDrawShape READ protectionDrawShape NOTIFY protectionDrawChanged)
+    Q_PROPERTY(double volume READ volume WRITE setVolume NOTIFY snapshotChanged)
+    Q_PROPERTY(double maximumVolume READ maximumVolume CONSTANT)
+    Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY snapshotChanged)
+    Q_PROPERTY(double playbackSpeed READ playbackSpeed NOTIFY snapshotChanged)
+    Q_PROPERTY(double minimumPlaybackRate READ minimumPlaybackRate CONSTANT)
+    Q_PROPERTY(double maximumPlaybackRate READ maximumPlaybackRate CONSTANT)
+    // True while the engine has not yet applied what the UI asked for. The UI
+    // shows the pending value and marks it, rather than lying about the state.
+    Q_PROPERTY(bool applying READ applying NOTIFY snapshotChanged)
+
+    // --- effect chain ------------------------------------------------------
+    // The chain as data. List mode renders it; node mode renders the same
+    // objects with positions. Both edit one chain, so switching modes never
+    // loses work.
+    Q_PROPERTY(QVariantList chain READ chain NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList nodeConnections READ nodeConnections NOTIFY chainChanged)
+    Q_PROPERTY(QVariantList effectCatalog READ effectCatalog NOTIFY chainChanged)
+    Q_PROPERTY(QString chainError READ chainError NOTIFY chainChanged)
+    Q_PROPERTY(bool chainValid READ chainValid NOTIFY chainChanged)
+    Q_PROPERTY(int nodeMode READ nodeMode WRITE setNodeMode NOTIFY chainChanged)
+
+    Q_PROPERTY(QVariantList presets READ presets NOTIFY presetsChanged)
+    // The name of the preset currently in effect, or "自定义" when the
+    // settings no longer match any stored preset. Derived, never guessed.
+    Q_PROPERTY(QString currentPresetName READ currentPresetName NOTIFY settingsChanged)
+
     // The last capture session the user actually ran, for the home page's
     // "continue" row. Absent until one exists: nothing is invented.
     Q_PROPERTY(QString colorStatus READ colorStatus NOTIFY snapshotChanged)

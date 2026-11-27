@@ -40,6 +40,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Check that every QML bridge name exists
+        run: python -B scripts/checks/qml_bridge_api.py
+
       - name: Stage pinned SDK headers and import libraries
         run: |
           if (Test-Path third_party_local) { throw 'third_party_local must not be tracked in Git' }
