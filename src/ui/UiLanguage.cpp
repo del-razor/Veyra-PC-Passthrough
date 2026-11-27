@@ -79,6 +79,17 @@ QStringList piecesOf(const QString& translation) {
     return translation.split(slot);
 }
 
+// OverRez: translated interface text names the product OverRez. The virtual camera
+// keeps its registered device name, so text that tells people to pick it stays exact.
+QString rebranded(QString text) {
+    static const QString camera = QStringLiteral("Veyra Virtual Camera");
+    static const QString hold = QString(QChar(0xE000));
+    text.replace(camera, hold);
+    text.replace(QStringLiteral("Veyra"), QStringLiteral("OverRez"));
+    text.replace(hold, camera);
+    return text;
+}
+
 std::unique_ptr<CatalogTranslator> load(const QString& code) {
     QFile file(QStringLiteral(":/i18n/catalog.json"));
     if (!file.open(QIODevice::ReadOnly)) {
@@ -90,7 +101,7 @@ std::unique_ptr<CatalogTranslator> load(const QString& code) {
     for (const auto value : doc.object().value(QStringLiteral("entries")).toArray()) {
         const auto e = value.toObject();
         const QString source = e.value(QStringLiteral("zh")).toString();
-        const QString translated = e.value(code).toString();
+        const QString translated = rebranded(e.value(code).toString());
         if (source.isEmpty() || translated.isEmpty()) continue;
         const QString context = e.value(QStringLiteral("ctx")).toString();
         if (!context.isEmpty()) { t->exact.insert(source + QChar(0x4) + context, translated); continue; }

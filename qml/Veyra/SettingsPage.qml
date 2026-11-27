@@ -28,7 +28,6 @@ VPage {
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
     readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
-    readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -1220,66 +1219,22 @@ VPage {
                         }
                         ColumnLayout {
                             spacing: 4
-                            VH1 { text: "Veyra" }
+                            VH1 { text: "OverRez" }
                             Text {
                                 text: qsTr("版本 ") + veyra.version
                                 color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsBody
                             }
+                            Text {
+                                text: "Beyond Ultra. Based on Veyra by Likely7."
+                                color: Theme.t3
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSmall
+                            }
                         }
                     }
                     VGroup {
-                        VRow {
-                            label: qsTr("下载线路")
-                            hint: qsTr("镜像失败时自动改用 GitHub 直连。")
-                            VSelect {
-                                objectName: "set-update-download-route"
-                                options: [
-                                    { id: "github", label: qsTr("GitHub 直连") },
-                                    { id: "gh-proxy", label: "GH-Proxy · gh-proxy.com" },
-                                    { id: "ghfast", label: "GHFast · ghfast.top" }
-                                ]
-                                value: (options.find(option => option.id === veyra.preferences.updateDownloadRoute) || options[0]).label
-                                enabled: !veyra.updates.checking && !root.portableUpdate.downloading
-                                onPicked: id => veyra.setPreference("updateDownloadRoute", id)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("检查更新")
-                            hint: veyra.updates.latestVersion.length > 0
-                                  ? qsTr("发现新版本 %1").arg(veyra.updates.latestVersion)
-                                  : qsTr("启动时自动检查，有更新时提示")
-                            Row {
-                                spacing: 6
-                                VButton {
-                                    text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
-                                    enabled: !veyra.updates.checking
-                                    onClicked: veyra.updates.check(true)
-                                }
-                                VButton {
-                                    visible: veyra.updates.latestVersion.length > 0
-                                    text: qsTr("查看更新")
-                                    onClicked: veyra.updates.openRelease()
-                                }
-                            }
-                        }
-                        VRow {
-                            visible: root.portableUpdate.available || root.portableUpdate.downloading || root.portableUpdate.scheduled
-                            label: root.portableUpdate.scheduled ? qsTr("更新已就绪，将在退出后安装")
-                                  : root.portableUpdate.downloading ? qsTr("正在下载更新 %1%").arg(root.portableUpdate.progress)
-                                  : qsTr("便携版更新 · %1").arg(root.portableUpdate.sizeText)
-                            hint: root.portableUpdate.available ? root.portableUpdate.releaseNotes : ""
-                            hintBelow: true
-                            VButton {
-                                objectName: "portable-download"
-                                text: root.portableUpdate.available ? qsTr("下载并在退出后更新") : qsTr("取消更新")
-                                onClicked: {
-                                    if (root.portableUpdate.available) root.portableUpdate.downloadAndSchedule()
-                                    else root.portableUpdate.cancel()
-                                }
-                            }
-                        }
                         VRow {
                             label: qsTr("反馈问题")
                             hint: qsTr("打开 GitHub Issues，诊断信息已自动复制")
@@ -1289,11 +1244,6 @@ VPage {
                             label: qsTr("赞助作者")
                             hint: qsTr("Patreon、微信与支付宝")
                             VButton { objectName: "about-sponsor"; text: qsTr("前往"); onClicked: root.section = "sponsor" }
-                        }
-                        VRow {
-                            label: qsTr("交流群")
-                            hint: qsTr("群二维码在项目主页 README 里")
-                            VButton { text: qsTr("查看"); onClicked: veyra.openProjectPage() }
                         }
                         VRow {
                             label: qsTr("诊断信息")

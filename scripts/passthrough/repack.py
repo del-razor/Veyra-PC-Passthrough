@@ -1,4 +1,4 @@
-"""Repack an official Veyra portable ZIP with this fork's player build.
+"""Repack an official Veyra portable ZIP with the OverRez player build.
 
 The official NVIDIA / AMD portable ZIPs carry the proprietary GPU runtimes,
 models and the launcher/updater. This fork changes only the player
@@ -19,11 +19,12 @@ import subprocess
 import tempfile
 import zipfile
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 PLAYER = "veyra_qml_ui.exe"
-PRODUCT = "Veyra-PLUS"
+PRODUCT = "OverRez"
+PRODUCT_VERSION = (ROOT / "OVERREZ_VERSION").read_text(encoding="utf-8").split()[0]
 MANIFEST = "package-manifest.json"
 
 
@@ -119,7 +120,7 @@ def replace_player(version_dir, build, dll_dirs):
     manifest["files"] = rows
     manifest["fork"] = dict(repository=os.environ.get("GITHUB_REPOSITORY", ""),
                             commit=os.environ.get("GITHUB_SHA", ""),
-                            note="Player rebuilt with the screen capture game mode (mouse passthrough) restored.")
+                            note="OverRez player: screen capture only, with the game mode (mouse passthrough) kept.")
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf8")
 
 
@@ -130,23 +131,52 @@ def write_zip(top, destination):
                 bundle.write(source, source.relative_to(top.parent).as_posix())
 
 
+FUCHSIA = (255, 0, 170)
+CYAN = (0, 229, 255)
+
+
+def _font(size):
+    """A fat geometric sans from the Windows font folder, else PIL's default."""
+    fonts = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "Fonts"
+    for name in ("segoeuib.ttf", "arialbd.ttf", "seguibl.ttf"):
+        if (fonts / name).is_file():
+            return ImageFont.truetype(str(fonts / name), size)
+    return ImageFont.load_default()
+
+
+def _gradient(size):
+    """Fuchsia to cyan, top-left to bottom-right."""
+    width, height = size
+    image = Image.new("RGB", size)
+    pixels = image.load()
+    for y in range(height):
+        for x in range(width):
+            f = (x / max(1, width - 1) + y / max(1, height - 1)) / 2
+            pixels[x, y] = tuple(int(a + (b - a) * f) for a, b in zip(FUCHSIA, CYAN))
+    return image
+
+
+def _gradient_text(canvas, text, font, centre_y):
+    draw = ImageDraw.Draw(canvas)
+    box = draw.textbbox((0, 0), text, font=font)
+    w, h = box[2] - box[0], box[3] - box[1]
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).text((-box[0], -box[1]), text, font=font, fill=255)
+    canvas.paste(_gradient((w, h)), ((canvas.width - w) // 2, centre_y - h // 2), mask)
+
+
 def compose_branding(directory):
-    art = ROOT / "qml/Veyra"
-    panel = ImageOps.fit(Image.open(art / "backdrop-dusk-strong.png").convert("RGBA"),
-                         (492, 1050), centering=(0.62, 0.52))
-    sun = Image.open(art / "intro-sun.png").convert("RGBA")
-    sun.thumbnail((326, 326), Image.Resampling.LANCZOS)
-    sun.putalpha(sun.getchannel("A").point(lambda value: int(value * 0.57)))
-    panel.alpha_composite(sun, ((panel.width - sun.width) // 2, 164))
-    wordmark = Image.open(art / "wordmark-dusk.png").convert("RGBA")
-    wordmark.thumbnail((392, 390), Image.Resampling.LANCZOS)
-    panel.alpha_composite(wordmark, ((panel.width - wordmark.width) // 2, 374))
+    """Installer artwork: the OverRez name and tagline until the final logo exists."""
+    panel = Image.new("RGB", (492, 1050), (10, 8, 18))
+    _gradient_text(panel, "OverRez", _font(96), 470)
+    tagline = _font(40)
+    draw = ImageDraw.Draw(panel)
+    box = draw.textbbox((0, 0), "Beyond Ultra.", font=tagline)
+    draw.text(((panel.width - (box[2] - box[0])) // 2, 560), "Beyond Ultra.", font=tagline, fill=(235, 235, 245))
     destination = directory / "brand-panel.png"
-    panel.convert("RGB").save(destination)
-    mark = Image.open(art / "logo-dusk.png").convert("RGBA")
-    mark.thumbnail((156, 116), Image.Resampling.LANCZOS)
-    icon = Image.new("RGBA", (174, 174), (0, 0, 0, 0))
-    icon.alpha_composite(mark, ((icon.width - mark.width) // 2, (icon.height - mark.height) // 2))
+    panel.save(destination)
+    icon = Image.new("RGB", (174, 174), (10, 8, 18))
+    _gradient_text(icon, "OR", _font(92), 87)
     small = directory / "brand-icon.png"
     icon.save(small)
     return destination, small
@@ -158,8 +188,9 @@ def entry(source, folder, name=None):
 
 
 def build_setup(top, version, flavor, iscc, output, work):
+    """version is the runtime folder (the upstream Veyra release); names use PRODUCT_VERSION."""
     directory = Path(tempfile.mkdtemp(prefix="iscc-", dir=work))
-    (directory / "veyra-installation.txt").write_bytes(f"VeyraPLUS.Win64.{flavor}".encode("ascii"))
+    (directory / "veyra-installation.txt").write_bytes(f"OverRez.Win64.{flavor}".encode("ascii"))
     version_dir = rf"\versions\{version}"
     files = [entry(directory / "veyra-installation.txt", ""),
              entry(iscc.parent / "license.txt", version_dir + r"\licenses", "INNO-SETUP.txt")]
@@ -177,13 +208,13 @@ def build_setup(top, version, flavor, iscc, output, work):
     panel, icon = compose_branding(directory)
     out = directory / "output"
     out.mkdir()
-    defines = dict(Flavor=flavor, AppVersion=version, OutputDir=out, PayloadList=payload,
+    defines = dict(Flavor=flavor, AppVersion=PRODUCT_VERSION, RuntimeVersion=version, OutputDir=out, PayloadList=payload,
                    AppIcon=ROOT / "assets/veyra.ico", BrandBackground=ROOT / "qml/Veyra/backdrop-dusk.png",
                    BrandPanel=panel, BrandIcon=icon)
     command = [str(iscc), "/Qp"] + [f"/D{k}={str(v).replace('/', os.sep)}" for k, v in defines.items()]
     command.append(str(ROOT / "scripts/installer/Veyra.iss"))
     subprocess.run(command, cwd=directory, check=True, timeout=1800)
-    name = f"{PRODUCT}-{version}-{flavor}-win64-setup.exe"
+    name = f"{PRODUCT}-{PRODUCT_VERSION}-{flavor}-win64-setup.exe"
     shutil.move(str(out / name), str(output / name))
     return output / name
 
@@ -209,14 +240,14 @@ def main():
         raise ValueError(f"{PLAYER} not found in {version_dir}")
     replace_player(version_dir, args.build, args.dll_dir)
     flavor = flavor_line.strip()
-    stem = f"{PRODUCT}-{version}-{flavor}-win64-portable"
+    stem = f"{PRODUCT}-{PRODUCT_VERSION}-{flavor}-win64-portable"
     renamed = top.with_name(stem)
     top.rename(renamed)
     top = renamed
     zip_out = args.output / f"{stem}.zip"
     write_zip(top, zip_out)
     setup = build_setup(top, version, flavor, args.iscc, args.output, args.work)
-    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor, version=version)))
+    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor, version=PRODUCT_VERSION, runtime=version)))
 
 
 if __name__ == "__main__":

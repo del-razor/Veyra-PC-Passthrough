@@ -1,6 +1,6 @@
 // 首页, rebuilt from the design (pages-a.js PAGES.home + pages.css .home).
 //
-// Veyra PLUS: the logo, the title, the screen capture card and the
+// OverRez: the logo, the title, the screen capture card and the
 // "continue last capture" row.
 // The logo in the dock returns here; there is no other home affordance.
 import QtQuick
@@ -137,11 +137,18 @@ VPage {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 visible: !Theme.dusk                    // the dusk wordmark says it
-                text: "Veyra PLUS"
+                text: "OverRez"
                 color: Theme.t1
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsH1
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
+            }
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "Beyond Ultra."
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
             }
         }
 

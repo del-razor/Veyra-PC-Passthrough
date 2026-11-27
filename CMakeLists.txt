@@ -687,6 +687,10 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # VEYRA_DISPLAY_VERSION is the human-readable version the app reports; it is
   # the same value the resource file uses, so the UI cannot drift from it.
   target_compile_definitions(veyra_qml_bridge PRIVATE VEYRA_DISPLAY_VERSION="${VEYRA_DISPLAY_VERSION}")
+  # OverRez has its own version line (OVERREZ_VERSION); the project version stays the
+  # upstream Veyra release it is based on, which the release workflow repacks.
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/OVERREZ_VERSION" OVERREZ_VERSION LIMIT_COUNT 1)
+  target_compile_definitions(veyra_qml_bridge PRIVATE OVERREZ_VERSION="${OVERREZ_VERSION}")
   # libass (ISC) + FreeType/FriBidi/HarfBuzz, static, for full ASS/SSA effect
   # subtitles. Local prebuilt tree only (vcpkg x64-windows-static-md); never in
   # source Git. Without it ASS tracks fall back to the built-in styled renderer.

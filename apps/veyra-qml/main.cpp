@@ -627,7 +627,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         ui::i18n::apply(QStringLiteral("zh-CN"));
         const UINT flags = notice == instance::Notice::ConfirmEnd
             ? MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING : MB_OK | MB_ICONINFORMATION;
-        return MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(message.utf16()), L"Veyra", flags) == IDYES;
+        return MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(message.utf16()), L"OverRez", flags) == IDYES;
     };
     wchar_t logOverride[32768]{};
     const auto overrideLength = GetEnvironmentVariableW(L"VEYRA_LOG_FILE", logOverride, 32768);
@@ -1418,7 +1418,7 @@ int main(int argc, char** argv) {
     if (result != 42 || program.isEmpty()) return result;
     // Player, QML engine and QApplication have all been destroyed.
     if (QProcess::startDetached(program, arguments)) return 0;
-    MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",
-                L"Veyra", MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen OverRez.",
+                L"OverRez", MB_OK | MB_ICONERROR);
     return 1;
 }

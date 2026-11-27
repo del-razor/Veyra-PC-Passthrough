@@ -33,7 +33,7 @@ Window {
     flags: Qt.Window | Qt.FramelessWindowHint
            | (veyra.passthroughActive ? Qt.WindowTransparentForInput : 0)
            | (veyra.gameInputActive ? Qt.WindowDoesNotAcceptFocus : 0)
-    title: "Veyra PLUS " + veyra.version
+    title: "OverRez " + veyra.version
 
     // Page ids match the prototype's PAGES keys so a design screenshot and an
     // app screenshot can be compared under the same name.
@@ -65,7 +65,7 @@ Window {
     }
     Binding { target: Theme; property: "reduced"; value: veyra.reducedMotion || root.test.reducedMotion === true }
     Binding { target: Theme; property: "accentName"; value: veyra.preferences.accent || "orange" }
-    // Veyra PLUS: the classic palette only.
+    // OverRez: the classic palette only.
     Binding { target: Theme; property: "paletteName"; value: "classic" }
     Binding { target: Theme; property: "backdropLevel"; value: veyra.preferences.backdrop !== undefined ? veyra.preferences.backdrop : 1 }
 
@@ -1027,7 +1027,6 @@ Window {
         function onPageChanged() { if (introLoader.item && root.page !== "home") introLoader.item.dismiss() }
     }
     Component.onCompleted: {
-        veyra.updates.startAutomaticCheck()
         applyStartupSize()
         // Open on the configured page: the user's saved preference, or the
         // override a test passes on the command line.
@@ -1053,7 +1052,7 @@ Window {
 
     // Startup music plays once, continuing after the intro or without it. Media-open
     // intent or the shared setting/button permanently stops it for this launch.
-    // Veyra PLUS: no startup music.
+    // OverRez: no startup music.
     readonly property bool musicOn: false
     readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
     function stopStartupMusicForSession() {
