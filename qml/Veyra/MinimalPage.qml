@@ -110,64 +110,15 @@ VPage {
                 }
             }
         }
-        // A network or server source that is paused to buffer, or reconnecting (#48): the
-        // picture stays up and says why it waits, instead of ending in an error and a black screen.
-        Rectangle {
-            id: bufferingPill
-            objectName: "min-network-buffering"
-            readonly property bool videoCover: true
-            property real coverRadius: 16
-            // The picture's width bounds the sentence; the pill never sizes the text back.
-            readonly property real maxTextWidth: Math.max(120, parent.width - 48 - 32 - 22 - 10)
-            visible: veyra.networkHolding && veyra.networkNotice.length > 0
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 96
-            width: bufferingRow.implicitWidth + 32
-            height: Math.max(40, bufferingText.height + 20)
-            radius: coverRadius
-            color: Theme.shade(22, 22, 26, 0.92)
-            border.width: 1
-            border.color: Theme.stroke2
-            Row {
-                id: bufferingRow
-                anchors.centerIn: parent
-                spacing: 10
-                VSpinner { anchors.verticalCenter: parent.verticalCenter }
-                Text {
-                    id: bufferingText
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.min(implicitWidth, bufferingPill.maxTextWidth)
-                    wrapMode: Text.WordWrap
-                    text: veyra.networkNotice
-                    color: Theme.t1
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsBody
-                }
-            }
-        }
     }
 
     VMenu {
         id: sourceMenu
         objectName: "min-source-menu"
         title: qsTr("片源")
-        items: [{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
-                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
-                { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
-                { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
-                { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
-                { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
-                { sep: true },
-                { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }].filter(Theme.plusSource)
+        items: [{ label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" }]
         onPicked: (i, o) => {
-            if (o.act === "file") veyra.openFileDialog()
-            else if (o.act === "network") veyra.openNetworkDialog()
-            else if (o.act === "ps5") veyra.openPs5Dialog()
-            else if (o.act === "moonlight") veyra.openMoonlightDialog()
-            else if (o.act === "xbox") veyra.openXboxDialog()
-            else if (o.act === "screen") veyra.openScreenCaptureDialog()
-            else if (o.act === "capture") veyra.openCaptureDialog()
+            if (o.act === "screen") veyra.openScreenCaptureDialog()
         }
     }
     readonly property bool sourceMenuOpen: sourceMenu.visible

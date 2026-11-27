@@ -58,7 +58,6 @@
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 #include "veyra/engine/EngineController.h"
-#include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
 #include "veyra/media/NetworkInput.h"
@@ -66,12 +65,10 @@
 #include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlDiskCache.h"
-#include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "../../src/ui/WinCaptionReader.h"
 #include "../../src/ui/AsrWorker.h"
 #include "veyra/ui/StartupMusic.h"
-#include "veyra/ui/ThumbnailProvider.h"
 #include "veyra/ui/UiLanguage.h"
 #include "veyra/ui/UpdateChecker.h"
 #include "veyra/base/PortableLayout.h"
@@ -421,10 +418,6 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
         covers.size(), w, h, result, error));
     logVideoWindowState(window, host, "region");
 }
-QString protocolTarget(const QString& argument) {
-    if (!argument.startsWith(QLatin1String("veyra://"), Qt::CaseInsensitive)) return {};
-    return QUrlQuery(QUrl(argument).query()).queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
-}
 
 bool reportLogHolders(const std::filesystem::path& path, int openErrno) {
     std::error_code pathError;
@@ -567,18 +560,6 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
 
 static int runApplication(int argc, char** argv, QString& restartProgram, QStringList& restartArgs) {
     const bool updateProbe = argc > 2 && std::strcmp(argv[1], "--portable-update-probe") == 0;
-    // ExportJobManager relaunches the owning executable with an inherited mapping.
-    // Dispatch before Qt or the video HWND exists, as the Win32 shell does.
-    if (argc > 1 && std::strcmp(argv[1], "--export-worker") == 0) {
-        if (argc != 3) return 2;
-        char* end = nullptr;
-        const auto value = std::strtoull(argv[2], &end, 10);
-        if (!value || !end || *end != '\0') return 2;
-        const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        const int result = engine::runExportWorker(reinterpret_cast<HANDLE>(static_cast<uintptr_t>(value)));
-        if (SUCCEEDED(com)) CoUninitialize();
-        return result;
-    }
 
     // Use exactly the same profile for ownership, renderer preferences and the
     // bridge. Portable versions within an installation share this profile.
@@ -869,26 +850,11 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         veyra::log::info("app", std::format("2.0.0 data directory ready; copied {} legacy files",
                                              migration.copied));
     }
-    // Custom (Chrome bridge): veyra://play?url=... — the URL protocol the
-    // extension falls back to when the player is not running. Parsed here because
-    // the bridge below consumes it; the handler is installed by install-protocol.cmd.
-    QString protocolUrl;
-    for (const QString& a : QCoreApplication::arguments()) {
-        protocolUrl = protocolTarget(a);
-        if (!protocolUrl.isEmpty()) break;
-    }
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
     if (updateProbe && portable::releaseVersion(bridge.version()) != QString::fromLatin1(argv[2])) return 2;
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
     auto* updater = qobject_cast<ui::UpdateChecker*>(bridge.updates())->portableUpdate();
 
-    // Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
-    // 127.0.0.1 only; port 18765 is fixed so the extension can find it without
-    // reading anything off disk (a browser cannot open local files).
-    ui::PlaybackServer playbackServer([&bridge](const QString& url){
-        bridge.bringToFront();bridge.openNetworkAddress(url);
-    });
-    if (!updateProbe) playbackServer.listen(18765);
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.
@@ -941,10 +907,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     });
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("vySoftwareUi"), softwareUi);
-    auto* thumbnails = new ui::ThumbnailProvider;
-    engine.addImageProvider(QStringLiteral("veyra-thumb"), thumbnails);
-    QObject::connect(&bridge, &ui::QmlPlayerBridge::thumbnailSourceChanged, &app,
-                     [thumbnails](const QString& path) { thumbnails->setSource(path); });
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml");
     engine.rootContext()->setContextProperty(QStringLiteral("veyra"), &bridge);
     engine.rootContext()->setContextProperty(QStringLiteral("vyMusic"), &startupMusic);
@@ -977,7 +939,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     //                           through the engine's own teardown instead of a kill
     //   --video-probe <normal|hidden|no-region|covers-only>  native-window diagnosis
     const QStringList args = QCoreApplication::arguments();
-    QString openPath;
     QVariantMap testOptions;
     if (updateProbe) testOptions.insert(QStringLiteral("portableUpdateProbe"), true);
     if(qEnvironmentVariableIsSet("VEYRA_TEST_DISABLE_PAUSED_UI_IDLE"))
@@ -1002,9 +963,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             testOptions.insert(QStringLiteral("aspect"), args.at(++i).toDouble());
         } else if (a == QLatin1String("--tip") && hasValue) {
             testOptions.insert(QStringLiteral("tip"), args.at(++i));
-        } else if (a == QLatin1String("--export-out") && hasValue) {
-            // A review run's export target, so a real export starts without the dialog.
-            bridge.setExportPath(args.at(++i));
         } else if (a == QLatin1String("--full-bar") && hasValue) {
             testOptions.insert(QStringLiteral("fullBar"), args.at(++i));
         } else if (a == QLatin1String("--full-debug")) {
@@ -1090,8 +1048,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                 veyra::log::info("qml-test", std::format("pref-at {}={}", pkey.toStdString(), pval.toStdString()));
                 bridge.setPreference(pkey, pval);
             });
-        } else if (!a.startsWith(QLatin1Char('-'))) {
-            openPath = a;
         }
     }
     if (!testOptions.isEmpty() || testSize.isValid())
@@ -1370,11 +1326,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     startupOpen.setSingleShot(true);
     if (!updateProbe) {
         QObject::connect(&startupOpen, &QTimer::timeout, &bridge, [&] {
-            if (!protocolUrl.isEmpty()) bridge.openNetworkAddress(protocolUrl);
-            else if (!openPath.isEmpty()) bridge.openPath(openPath);
-            else bridge.autoResumeLastSource(!anotherVeyraLogHolder || explicitDataDirectory);
+            bridge.autoResumeLastSource(!anotherVeyraLogHolder || explicitDataDirectory);
         });
-        startupOpen.start(protocolUrl.isEmpty() ? 600 : 1500);
+        startupOpen.start(600);
     }
     profileInstance.listen(reinterpret_cast<HWND>(window->winId()), [&](const QString& target) {
         // Acknowledge the handoff before running callbacks that may open media.
@@ -1384,14 +1338,12 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             if (GetForegroundWindow() != hwnd && !SetForegroundWindow(hwnd)) FlashWindow(hwnd, TRUE);
             if (target.isEmpty()) return;
             startupOpen.stop();
-            if (const auto url = protocolTarget(target); !url.isEmpty()) bridge.openNetworkAddress(url);
-            else if (QFileInfo::exists(target) || media::networkMediaInput(target.toStdWString())) bridge.openPath(target);
         });
     });
     const int rc = app.exec();
     profileInstance.stopListening();
     if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
-    if (rc == 0 && updater->scheduled() && !bridge.exportRunning()) {
+    if (rc == 0 && updater->scheduled()) {
         if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
         return portable::applyExitCode;
     }
@@ -1445,7 +1397,7 @@ int main(int argc, char** argv) {
         self.resize(GetModuleFileNameW(nullptr, self.data(), DWORD(self.size())));
         veyra::pipeline::amdhip::setPreflightExecutable(self);
         const std::string_view option = argc > 1 ? argv[1] : "";
-        if (option != "--managed-portable" && option != "--portable-update-probe" && option != "--export-worker") {
+        if (option != "--managed-portable" && option != "--portable-update-probe") {
             const auto root = portable::rootFromVersionDirectory(std::filesystem::path(self).parent_path());
             if (!root.empty()) {
                 int count = 0;

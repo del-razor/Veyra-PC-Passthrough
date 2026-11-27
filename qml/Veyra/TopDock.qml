@@ -43,9 +43,8 @@ Item {
     readonly property var items: [
         { id: "min",   icon: "tv", tip: qsTr("极简") },
         { id: "pro",   icon: "sliders", tip: qsTr("专业模式") },
-        { id: "exp",   icon: "upload", tip: qsTr("导出") },
         { id: "set",   icon: "settings", tip: qsTr("设置") }
-    ].filter(o => !Theme.plusScreenOnly || o.id !== "exp")
+    ]
 
     // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
     Item {
@@ -222,15 +221,6 @@ Item {
                                     font.family: Theme.fontUi
                                     font.pixelSize: 11   // 11.5px; pixelSize is an int (fractional sizes: G3)
                                 }
-                            }
-                            // Export badge: a running export marks the export button
-                            // with the design's pulsing .dot.warn; engine state only.
-                            VDot {
-                                visible: btn.modelData.id === "exp" && veyra.exportRunning
-                                warn: true
-                                x: btn.width - width - 3
-                                y: 3
-                                width: 6; height: 6; radius: 3
                             }
                             HoverHandler { id: btnHover; cursorShape: Qt.PointingHandCursor }
                             TapHandler { id: btnTap; onTapped: dockRoot.requestPage(btn.modelData.id) }

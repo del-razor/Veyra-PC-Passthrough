@@ -17,13 +17,6 @@
 #include "veyra/engine/EngineWatchdog.h"
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/sink/HdmiBitstreamOutput.h"
-#include "veyra/remoteplay/SessionInbox.h"
-#ifdef VEYRA_ENABLE_MOONLIGHT
-#include "veyra/source/MoonlightSessionSource.h"
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-#include "veyra/source/XboxSessionSource.h"
-#endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/media/NetworkSettings.h"
 #include "veyra/sink/VideoEncoder.h"
@@ -32,8 +25,6 @@
 #include "veyra/engine/VirtualCamera.h"
 #include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
-namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
-namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
@@ -230,14 +221,7 @@ struct PlayerSnapshot {
     bool gpuFailed=false;
     int remotePlayState=0; uint64_t remotePlaySkipped=0;
     bool remoteRecovering=false;unsigned remoteReconnectAttempts=0;std::wstring remoteRecoveryMessage;
-    remoteplay::SessionInbox::Snapshot remoteStream;
     double remoteReceivedFps=0,remoteDecodedFps=0;bool remoteRatesReady=false;uint64_t remoteReceived=0,remoteDecoded=0,remoteIngressDropped=0;
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    bool moonlightActive=false;source::MoonlightStats moonlight;
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-    bool xboxActive=false;source::XboxStats xbox;
-#endif
 };
 class EngineController {
 public:
@@ -249,47 +233,6 @@ public:
     bool requestSettings(EnhancementSettings,std::optional<ChainRuntimeOrder> = std::nullopt,uint64_t* acceptedRevision=nullptr);
     void requestPresentation(PresentationSettings);
     void open(HWND video,const std::wstring& path,PlayerOptions options);
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
-    remoteplay::ControllerFeedback remotePlayFeedback();
-    void remotePlayController(const remoteplay::ControllerState&);
-    void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
-    void remotePlayLoginPin(std::string);
-    // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
-    // (the console's keepalive video and audio are dropped on receipt). Start and
-    // stop are queued to a dedicated thread, so callers never wait for the
-    // console, and a newer request replaces a queued one. The session survives
-    // capture re-opens; opening any other source, or a PS5 stream (the console has
-    // one Remote Play slot), stops it. Pad, rumble and login PIN go through the
-    // remotePlay* calls above when no PS5 stream runs.
-    void startRemoteControl(source::RemotePlayConnectDesc);
-    void stopRemoteControl();
-    struct RemoteControlStatus{
-        bool requested=false; // a start is queued or a session exists
-        bool starting=false,alive=false,connected=false,pinRequired=false,recovering=false,failed=false;
-        bool keepaliveReady=false;double keepaliveFps=0; // console video samples dropped per second
-        std::wstring message;
-    };
-    RemoteControlStatus remoteControlStatus()const;
-    bool remoteControlRequested()const; // cheap: a start is queued or a session exists
-#endif
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    void openMoonlight(HWND, source::MoonlightConnectDesc, PlayerOptions);
-    // Input for the running Moonlight session; all are no-ops when none is streaming.
-    void moonlightController(const remoteplay::ControllerState&);
-    remoteplay::ControllerFeedback moonlightFeedback();
-    void moonlightKey(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down);
-    void moonlightMouseMove(int dx, int dy);
-    void moonlightMouseButton(int button, bool down);
-    void moonlightScroll(int delta, bool horizontal);
-    void moonlightReleaseInput();
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-    void openXbox(HWND, source::XboxConnectDesc, PlayerOptions);
-    // Pad and rumble for the running Xbox session; no-ops when none is streaming.
-    void xboxController(const remoteplay::ControllerState&);
-    remoteplay::ControllerFeedback xboxFeedback();
-#endif
     void stop();
     sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
@@ -307,7 +250,6 @@ public:
     bool selectAudioTrack(uint64_t sessionId,int streamIndex);
     void seek(double seconds){if(!std::isfinite(seconds)||seconds<0)return;std::lock_guard lock(mutex_);snapshot_.seekTarget=seconds;++snapshot_.seekRequested;seekSeconds_.store(seconds);}
     void saveFrame(const std::wstring& path);
-    void startExport(const std::wstring& input,const std::wstring& output,PlayerOptions,bool hevc);
     PlayerSnapshot snapshot()const;
     // Live recording of the processed picture and the played sound
     // (LiveRecorder.h). Any thread; the file opens with the next presented
@@ -334,35 +276,17 @@ public:
     // the UI; queried in the background on events only. Any thread.
     DisplayStateService& displayStates(){return displayStates_;}
 private:
-    void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
+    void run(HWND,std::wstring,PlayerOptions);
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
     void noteEngineHang(uint64_t stalledMs,bool captureDriver);
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    void controlLoop(std::stop_token);
-    void waitRemoteControlIdle();
-#endif
     mutable std::mutex mutex_;
     PlayerSnapshot snapshot_;
     PresentationSettings presentation_;
     uint64_t presentationRevision_=1;
     std::shared_ptr<FrameFlowWindow> activeFlow_;
-    std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    std::shared_ptr<source::RemotePlaySessionSource> controlRemote_; // mutex_; PS5 手柄控制
-    // controlMutex_ guards the queue below; the session thread never holds it
-    // (nor mutex_) while it talks to the console.
-    mutable std::mutex controlMutex_;
-    std::condition_variable_any controlWake_;
-    std::condition_variable controlIdle_;
-    std::optional<std::shared_ptr<source::RemotePlayConnectDesc>> controlPending_; // empty pointer = stop
-    bool controlBusy_=false,controlStarting_=false,controlExited_=false;
-    std::jthread controlThread_; // started on first use; joined (bounded) in the destructor
-#endif
-    std::shared_ptr<source::MoonlightSessionSource> activeMoonlight_;
-    std::shared_ptr<source::XboxSessionSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
     // Live recorder: every session's presenter records into it; it owns its
@@ -396,9 +320,6 @@ private:
     std::atomic<double> requestedPlaybackRate_{1};
     std::atomic<bool> fullscreenMemoryProtection_{false};
     std::atomic<int> fullscreenFrameStatsCorner_{-1};
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    std::atomic<bool> remotePlayTouchpadPressOnly_{false};
-#endif
     std::atomic<bool> hdrCoverageObserved_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};

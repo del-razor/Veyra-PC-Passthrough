@@ -33,15 +33,5 @@ foreach(stage Track Roi Stats Blur Apply)
 endforeach()
 
 # Detector against OpenCV's reference outputs (scripts/beauty/yunet-reference.py).
-add_executable(veyra_beauty_detector_tests tests/integration/BeautyDetectorTests.cpp)
-target_compile_features(veyra_beauty_detector_tests PRIVATE cxx_std_20)
-target_compile_options(veyra_beauty_detector_tests PRIVATE /utf-8)
-target_compile_definitions(veyra_beauty_detector_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(veyra_beauty_detector_tests PRIVATE veyra_pipeline veyra_sinks)
 
 # The beauty node in the real graph: restore / smoothing / HDR / tracking / timing.
-add_executable(veyra_beauty_gpu_tests tests/integration/BeautyGpuTests.cpp)
-target_compile_features(veyra_beauty_gpu_tests PRIVATE cxx_std_20)
-target_compile_options(veyra_beauty_gpu_tests PRIVATE /utf-8)
-target_compile_definitions(veyra_beauty_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(veyra_beauty_gpu_tests PRIVATE veyra_engine)

@@ -23,12 +23,11 @@ VPage {
     onSectionChanged: {
         capturingKey = ""
         if (settingsBodyScroll) settingsBodyScroll.contentY = settingsBodyScroll.originY
-        if (section === "ps5") veyra.ps5Load()
         // M32: the section's groups redraw one after another (pages-b.js
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
     readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
@@ -49,13 +48,12 @@ VPage {
         { id: "audio",  label: qsTr("音频"), icon: "vol" },
         { id: "perf",   label: qsTr("性能"), icon: "gauge" },
         { id: "compat", label: qsTr("兼容"), icon: "monitor" },
-        { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad", plusHidden: true },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
         { id: "about", label: qsTr("关于"), icon: "info" },
         // The one entry with a coloured icon, so it can be found.
         { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
-    ].filter(o => !Theme.plusScreenOnly || !o.plusHidden)
+    ]
 
     // --- nav ---------------------------------------------------------------
     Rectangle {
@@ -361,15 +359,6 @@ VPage {
                                 onToggled: v => veyra.setPreference("autoResume", v)
                             }
                         }
-                        VRow {
-                            label: qsTr("记住播放位置")
-                            hint: qsTr("重新打开同一个文件时从上次位置继续")
-                            VSwitch {
-                                objectName: "set-resume"
-                                checked: veyra.preferences.rememberPosition !== false
-                                onToggled: checked => veyra.setPreference("rememberPosition", checked)
-                            }
-                        }
                     }
                 }
 
@@ -390,79 +379,9 @@ VPage {
                     }
                     VGroup {
                         VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("解码")
-                            hint: (veyra.preferences.decode || "auto") === "hardware"
-                                  ? qsTr("强制硬解 = 只用硬件解码，打不开时报错不回退；下次打开文件生效")
-                                  : qsTr("自动 = 优先硬解，失败回退软解；下次打开文件生效")
-                            VSeg {
-                                objectName: "set-decode"
-                                options: [{ id: "auto", label: qsTr("自动") }, { id: "hardware", label: qsTr("强制硬解") }, { id: "software", label: qsTr("软解") }]
-                                current: veyra.preferences.decode || "auto"
-                                onPicked: id => veyra.setPreference("decode", id)
-                            }
-                        }
-                        VRow {
                             label: qsTr("HDR 输出格式")
                             hint: qsTr("HDR10 默认；补帧固定 HDR10，需要 Windows HDR 开启")
                             VSeg { options: [{id:"0",label:"HDR10"},{id:"1",label:qsTr("scRGB 浮点")}]; current: String(veyra.hdrOutputMode); onPicked: id => veyra.hdrOutputMode = Number(id) }
-                        }
-                        VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("自动去隔行")
-                            hint: veyra.deinterlaceAvailable ? qsTr("只处理标记为隔行的视频，优先使用 GPU；软解使用兼容算法。下次打开视频生效。") : qsTr("当前软件包未包含去隔行组件")
-                            VSwitch { enabled: veyra.deinterlaceAvailable; checked: veyra.preferences.deinterlace !== false; onToggled: checked => veyra.setPreference("deinterlace",checked) }
-                        }
-                        // Network / server playback (#48). Read when a source opens.
-                        VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("网络缓冲")
-                            hint: qsTr("网络地址、直播与服务器视频先攒一段再播放；服务器速度低于视频码率时暂停缓冲并说明原因，不会报错黑屏。下次打开网络视频生效")
-                            VSeg {
-                                objectName: "set-network-buffer"
-                                options: [{ id: "auto", label: qsTr("自动") }, { id: "off", label: qsTr("关闭", "off") },
-                                          { id: "small", label: qsTr("小") }, { id: "medium", label: qsTr("中") }, { id: "large", label: qsTr("大") }]
-                                current: veyra.preferences.networkBuffer || "auto"
-                                onPicked: id => veyra.setPreference("networkBuffer", id)
-                            }
-                        }
-                        VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("起播预缓冲")
-                            hint: qsTr("开始播放前先攒够的秒数；“跟随缓冲档”按上面的缓冲档位决定。下次打开网络视频生效")
-                            VSelect {
-                                objectName: "set-network-prebuffer"
-                                implicitWidth: 170
-                                options: [{ id: "-1", label: qsTr("跟随缓冲档") }, { id: "0", label: qsTr("不等待") },
-                                          { id: "3", label: qsTr("%1 秒").arg(3) }, { id: "5", label: qsTr("%1 秒").arg(5) },
-                                          { id: "10", label: qsTr("%1 秒").arg(10) }, { id: "20", label: qsTr("%1 秒").arg(20) },
-                                          { id: "30", label: qsTr("%1 秒").arg(30) }]
-                                value: (options.find(o => o.id === (veyra.preferences.networkPrebuffer === undefined ? "-1" : String(veyra.preferences.networkPrebuffer))) || options[0]).label
-                                onPicked: id => veyra.setPreference("networkPrebuffer", Number(id))
-                            }
-                        }
-                        VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("断线自动重连")
-                            hint: qsTr("网络中断后自动重连：点播从断点继续，直播重新连接；关闭后断线即停止。下次打开网络视频生效")
-                            VSwitch {
-                                objectName: "set-network-reconnect"
-                                checked: veyra.preferences.networkAutoReconnect !== false
-                                onToggled: checked => veyra.setPreference("networkAutoReconnect", checked)
-                            }
-                        }
-                        VRow {
-                            visible: !Theme.plusScreenOnly
-                            label: qsTr("损坏画面处理")
-                            hint: (veyra.preferences.networkCorrupt || "conceal") === "keyframe"
-                                  ? qsTr("等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效")
-                                  : qsTr("保持画面 = 显示解码器修补后的画面，动作不中断；只对网络视频与 MPEG-TS 生效")
-                            VSeg {
-                                objectName: "set-network-corrupt"
-                                options: [{ id: "conceal", label: qsTr("保持画面") }, { id: "keyframe", label: qsTr("等待关键帧") }]
-                                current: veyra.preferences.networkCorrupt || "conceal"
-                                onPicked: id => veyra.setPreference("networkCorrupt", id)
-                            }
                         }
                         VRow {
                             label: qsTr("HDR 亮度曲线") + " / " + qsTr("HDR 元数据")
@@ -600,17 +519,6 @@ VPage {
                                 }
                             }
 
-                        }
-                        VRow {
-                            label: qsTr("字幕默认字号")
-                            hint: qsTr("双行不自动缩小；更多样式在字幕设置里")
-                            VSeg {
-                                objectName: "set-subsize"
-                                readonly property int size: veyra.preferences.subtitleSize || 22
-                                options: [{ id: "18", label: qsTr("小") }, { id: "22", label: qsTr("中") }, { id: "28", label: qsTr("大") }]
-                                current: size <= 19 ? "18" : size >= 26 ? "28" : "22"
-                                onPicked: id => veyra.setPreference("subtitleSize", Number(id))
-                            }
                         }
                         VRow {
                             visible: (veyra.liveTranslation || null) !== null
@@ -1144,87 +1052,6 @@ VPage {
                     }
                 }
 
-                // --- PS5 串流 --------------------------------------------
-                ColumnLayout {
-                    id: secPs5
-                    Layout.fillWidth: true
-                    spacing: 12
-                    visible: root.section === "ps5"
-                    VH1 { text: qsTr("PS5 串流") }
-                    Text {
-                        text: qsTr("主机配对凭据加密保存在用户数据目录。")
-                        color: Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsBody
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("已保存主机")
-                            hint: (veyra.ps5.host || "").length > 0 ? veyra.ps5.host + (veyra.remotePlayState.length > 0 ? " · " + veyra.remotePlayState : "") : qsTr("还没有配对的主机")
-                            VButton { text: qsTr("管理"); onClicked: veyra.openPs5Dialog() }
-                        }
-                        VRow {
-                            label: qsTr("画质")
-                            VSelect {
-                                objectName: "set-ps5-quality"
-                                implicitWidth: 170
-                                readonly property var qualities: [{ id: "0", label: "720p · 30 fps" }, { id: "1", label: "720p · 60 fps" }, { id: "2", label: "1080p · 30 fps" }, { id: "3", label: "1080p · 60 fps" }]
-                                options: qualities
-                                value: qualities[veyra.ps5.quality || 0].label
-                                onPicked: id => veyra.ps5Set("quality", Number(id))
-                            }
-                        }
-                        VRow {
-                            label: qsTr("编码")
-                            hint: qsTr("HDR 需要 PS5 实际输出 HDR 且 Windows HDR 开启")
-                            VSeg {
-                                objectName: "set-ps5-codec"
-                                options: [{ id: "0", label: "H.264" }, { id: "1", label: "H.265" }, { id: "2", label: "H.265 HDR" }]
-                                current: String(veyra.ps5.codec || 0)
-                                onPicked: id => veyra.ps5Set("codec", Number(id))
-                            }
-                        }
-                        VRow {
-                            label: qsTr("请求码率")
-                            hint: qsTr("发给 PS5 的带宽请求，主机不保证达到")
-                            VSelect {
-                                objectName: "set-ps5-bitrate"
-                                implicitWidth: 130
-                                readonly property var bitrates: [5, 10, 15, 20, 30, 50, 80, 100].map((m, i) => ({ id: String(i), label: m + " Mbps" }))
-                                options: bitrates
-                                value: bitrates[veyra.ps5.bitrate || 0].label
-                                onPicked: id => veyra.ps5Set("bitrate", Number(id))
-                            }
-                        }
-                        VRow {
-                            label: qsTr("PSN 账号")
-                            hint: qsTr("按指南用索尼官方登录获取 Account ID，再到 PS5 串流窗口填写并配对。切勿向第三方网站提供 NPSSO。")
-                            hintBelow: true
-                            RowLayout {
-                                spacing: 6
-                                VButton { objectName: "set-ps5-account-lookup"; text: qsTr("获取 Account ID"); ghost: true; onClicked: veyra.ps5OpenAccountChecker() }
-                                VButton { objectName: "set-ps5-pairing"; text: qsTr("配对设置"); ghost: true; onClicked: veyra.openPs5Dialog() }
-                            }
-                        }
-                    }
-                    Rectangle {
-                        Layout.fillWidth: true
-                        implicitHeight: psNote.implicitHeight + 20
-                        radius: 9
-                        color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
-                        Text {
-                            id: psNote
-                            anchors.fill: parent
-                            anchors.margins: 10
-                            text: qsTr("这里和 PS5 串流窗口是同一份设置，下次连接时一起保存到该主机的配对档案。")
-                            color: Theme.t2
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsSmall
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-
                 // --- 快捷键 ----------------------------------------------
                 ColumnLayout {
                     id: secKeys
@@ -1289,11 +1116,7 @@ VPage {
                         Repeater {
                             model: [
                                 { a: qsTr("后退 / 前进 5 秒"), k: "← / →" },
-                                { a: qsTr("播放 / 暂停（播放文件时）"), k: qsTr("单击画面") },
                                 { a: qsTr("音量"), k: "↑ / ↓" },
-                                { a: qsTr("打开文件 / 导出页"), k: "Ctrl+O / Ctrl+E" },
-                                { a: qsTr("字幕开关 / 主轨 / 副轨"), k: "B / T / Y" },
-                                { a: qsTr("字幕延时 50 ms（Shift = 1 s）"), k: "Z / X" },
                             ]
                             delegate: VRow {
                                 required property var modelData

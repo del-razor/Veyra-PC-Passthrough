@@ -273,17 +273,6 @@ void QmlPlayerBridge::setNodeMode(int mode) {
     emit settingsChanged();
 }
 
-QVariantList QmlPlayerBridge::recentFiles() const {
-    QVariantList out;
-    for (const auto& entry : impl_->facade.recentFiles()) {
-        QVariantMap item;
-        item["path"] = utf8Of(entry.path);
-        item["label"] = utf8Of(entry.label);
-        item["exists"] = entry.exists;
-        out << item;
-    }
-    return out;
-}
 
 QVariantList QmlPlayerBridge::presets() const {
     QVariantList out;
@@ -973,33 +962,6 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     return true;
 }
 
-void QmlPlayerBridge::enqueueExportFile(const QString& input,const QString& output) {
-    if(!QFileInfo(input).isFile()){emit notice(tr("队列输入文件不存在"),true);return;}
-    impl_->exportQueue.addFile(input,output);emit exportChanged();
-}
-void QmlPlayerBridge::addExportFiles(const QStringList& paths) {
-    for(const auto& path:paths){const auto url=QUrl(path);const QString file=url.isLocalFile()?url.toLocalFile():path;
-        if(QFileInfo(file).isFile())impl_->exportQueue.addFile(file);
-        else emit notice(tr("无法添加文件：%1").arg(file),true);
-    }
-    emit exportChanged();
-}
-void QmlPlayerBridge::addExportFilesDialog() {
-    addExportFiles(QFileDialog::getOpenFileNames(nullptr,tr("加入导出队列"),QString(),
-        tr("视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)")));
-}
-bool QmlPlayerBridge::selectExportPreset(int index) {
-    if (index == -1) {
-        impl_->exportPresetName.clear();
-    } else {
-        const auto& entries = impl_->facade.presets().entries();
-        if (index < 0 || size_t(index) >= entries.size() || entries[size_t(index)].kind == engine::ChainMode::Node)
-            return false;
-        impl_->exportPresetName = entries[size_t(index)].name;
-    }
-    emit exportChanged();
-    return true;
-}
 
 bool QmlPlayerBridge::savePresetAs(const QString& name, int contentsMask, bool nodeMode) {
     if (name.isEmpty()) { emit notice(tr("预设需要一个名字"), true); return false; }
@@ -1040,10 +1002,8 @@ bool QmlPlayerBridge::deletePreset(int index) {
     if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
     const auto& entry = impl_->facade.presets().entries()[size_t(index)];
     if (entry.builtin) { emit notice(tr("内置预设不能删除，可以另存一份"), true); return false; }
-    const bool selected = impl_->exportPresetName == entry.name;
     const bool ok = impl_->facade.presets().erase(size_t(index));
     if (ok) {
-        if (selected) { impl_->exportPresetName.clear(); emit exportChanged(); }
         emit presetsChanged();
     }
     return ok;
@@ -1051,10 +1011,8 @@ bool QmlPlayerBridge::deletePreset(int index) {
 
 bool QmlPlayerBridge::renamePreset(int index, const QString& name) {
     if (index < 0 || size_t(index) >= impl_->facade.presets().entries().size()) return false;
-    const bool selected = impl_->exportPresetName == impl_->facade.presets().entries()[size_t(index)].name;
     const bool ok = impl_->facade.presets().rename(size_t(index), wideOf(name));
     if (ok) {
-        if (selected) { impl_->exportPresetName = wideOf(name); emit exportChanged(); }
         emit presetsChanged();
     }
     return ok;
@@ -1123,17 +1081,6 @@ bool QmlPlayerBridge::duplicatePreset(int index) {
     return ok;
 }
 
-void QmlPlayerBridge::refreshRecentFiles() {
-    impl_->facade.refreshRecentFiles();
-    emit recentFilesChanged();
-}
-void QmlPlayerBridge::clearRecentFiles() {
-    if (!impl_->facade.clearRecentFiles()) {
-        emit notice(uiText(impl_->facade.error()), true);
-        return;
-    }
-    emit recentFilesChanged();
-}
 
 
 

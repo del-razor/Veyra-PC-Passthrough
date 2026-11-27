@@ -181,144 +181,9 @@ QString QmlPlayerBridge::backendWarning() const {
     return uiText(snapshot.backendWarning);
 }
 
-// --- commands ---------------------------------------------------------------
-void QmlPlayerBridge::openFileDialog() {
-    veyra::log::info("qml-file", "openFileDialog entered");
-    const QString path = QFileDialog::getOpenFileName(
-        nullptr, tr("打开视频或图片"), QString(),
-        tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)"));
-    veyra::log::info("qml-file", path.isEmpty() ? "openFileDialog cancelled" : "openFileDialog selected file");
-    if (!path.isEmpty()) openPath(path);
-}
-int QmlPlayerBridge::thumbnailGeneration() const { return impl_->thumbnailGeneration; }
 
-QObject* QmlPlayerBridge::playlist() const { return impl_->playlist; }
-void QmlPlayerBridge::showPlaylist() { emit playlistRequested(); }
-void QmlPlayerBridge::addPlaylistFilesDialog() {
-    const auto paths = QFileDialog::getOpenFileNames(nullptr, tr("添加文件到播放列表"), {},
-        tr("媒体文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts *.mts *.m4v *.wmv *.mpg *.mpeg *.vob *.flv *.ogv *.asf *.3gp *.jpg *.jpeg *.png *.bmp *.webp);;所有文件 (*)"));
-    if (!paths.isEmpty()) { impl_->playlist->addPaths(paths); emit playlistRequested(); }
-}
-void QmlPlayerBridge::addPlaylistFolderDialog() {
-    const auto path = QFileDialog::getExistingDirectory(nullptr, tr("导入文件夹到播放列表"));
-    if (!path.isEmpty()) { impl_->playlist->addPaths({path}); emit playlistRequested(); }
-}
-void QmlPlayerBridge::openDroppedUrls(const QList<QUrl>& urls) {
-    // A single file on the video retains drag-to-open. Folder/multi-file drops
-    // append to the playlist; dropping inside PlaylistWindow always appends.
-    if (urls.size() == 1) {
-        const QUrl url = urls.front();
-        if(!url.isLocalFile()){openUrl(url);return;}
-        if (url.isLocalFile() && !QFileInfo(url.toLocalFile()).isDir()) { openUrl(url); return; }
-    }
-    impl_->playlist->addUrls(urls);
-    emit playlistRequested();
-}
-void QmlPlayerBridge::tickPlaylist() {
-    const auto& s = impl_->snapshot;
-    using T = engine::TransportState;
-    if (!impl_->playlistSession) return;
-    if (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
-        impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return;
-    }
-    if (s.sessionId != impl_->playlistSession) return; // Ignore old session snapshots after open.
-    if (s.capture || s.remotePlay) { impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return; }
-    QString state = QStringLiteral("stopped");
-    switch (s.transport) {
-    case T::Opening: state = QStringLiteral("opening"); break;
-    case T::Playing: state = s.image ? QStringLiteral("image") : QStringLiteral("playing"); break;
-    case T::Paused: state = QStringLiteral("paused"); break;
-    case T::Ended: state = QStringLiteral("ended"); break;
-    case T::Failed: state = QStringLiteral("failed"); break;
-    default: break;
-    }
-    impl_->playlist->setPlayback(impl_->playlistPath, state);
-    if (s.transport != T::Ended || s.failed || s.image || impl_->openingSource ||
-        impl_->playlistCompletedSession == s.sessionId) return;
-    impl_->playlistCompletedSession = s.sessionId;
-    // Wait for this GUI tick to finish, then recheck the engine session. A stop,
-    // new file, or live source selected in between must cancel auto-advance.
-    QTimer::singleShot(0, this, [this, session = s.sessionId] {
-        const auto latest = impl_->engine.snapshot();
-        if (impl_->playlistSession == session && latest.sessionId == session &&
-            latest.transport == T::Ended && !latest.failed && !latest.image && impl_->liveKind.isEmpty())
-            impl_->playlist->advanceAfterEnd();
-    });
-}
 
-void QmlPlayerBridge::openPath(const QString& path) {
-    if (path.isEmpty()) return;
-    impl_->screenCropPreview = false;
-    endExclusionMove(false);
-    impl_->exclusionSelected=-1;
-    flushHdrMemory();impl_->hdrTitleApplied.clear();
-    const bool network=media::networkMediaInput(wideOf(path));
-    if (QFileInfo(path).isDir()) {
-        impl_->playlist->addPaths({path}); emit playlistRequested(); return;
-    }
-    if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
-    impl_->playlistPath = path;
-    impl_->playlist->setPlayback(path, QStringLiteral("opening"));
-    rememberPosition(true);
-    impl_->exportQueue.setSelectedId(0);
-    ++impl_->liveOpenGen; impl_->pendingLiveText.clear();   // a waiting live open is dropped
-    impl_->exportTrimStartSeconds = 0.0;
-    impl_->exportTrimEndSeconds = 0.0;
-    emit exportChanged();
-    emit mediaOpenRequested();
-    impl_->openingSource = true;
-    impl_->openingSessionId = 0;
-    const std::wstring wide = wideOf(path);
-    impl_->sourceLabel = wide;
-    impl_->liveKind.clear();
-    impl_->liveLabel.clear();
-    if(network){impl_->liveKind=QStringLiteral("url");impl_->liveLabel=QUrl(path).host();}
-    ++impl_->thumbnailGeneration;
-    emit thumbnailSourceChanged(network?QString():path);
-    emit thumbnailGenerationChanged();
-    if(!network)impl_->facade.noteRecentFile(wide);
-    emit recentFilesChanged();
-    // Switch to a page with a video area, then settle the native window's
-    // geometry, and only then open. The presenter samples the window's client
-    // size once at initialisation; opening before that point is what produced a
-    // 1x1 swapchain.
-    if (impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home"))
-        emit navigate(QStringLiteral("pro"));
-    if(!network)rememberSource(QStringLiteral("file"), path);
-    if (impl_->preOpen) impl_->preOpen();
-    auto options = impl_->options;
-    options.softwareDecode = impl_->prefString("decode") == QLatin1String("software");
-    options.hardwareDecodeOnly = impl_->prefString("decode") == QLatin1String("hardware");
-    options.deinterlace=deinterlaceAvailable()&&impl_->prefBool("deinterlace",true);
-    // Network / server playback (#48): read at open, like the decode choice above.
-    options.network.level=media::networkBufferLevelFromId(impl_->prefString("networkBuffer").toStdString());
-    options.network.startupPrebufferSeconds=impl_->prefs.value(QStringLiteral("networkPrebuffer"),-1).toInt();
-    options.network.autoReconnect=impl_->prefBool("networkAutoReconnect",true);
-    options.network.timeshiftSeconds=impl_->prefInt("networkTimeshift",0);
-    options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
-    impl_->engine.open(impl_->videoWindow, wide, options);
-    impl_->openingSessionId = impl_->engine.snapshot().sessionId;
-    impl_->playlistSession = network?0:impl_->openingSessionId;
-    impl_->resumeSession = 0;
-    if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
-        const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
-        if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
-    }
-    refreshSubtitles(!network||engine::subtitleHttpContainer(wide)?wide:std::wstring());
-}
 
-bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
-void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
-bool QmlPlayerBridge::openNetworkAddress(const QString& address){
-    const QString trimmed = address.trimmed();
-    const QUrl url(trimmed,QUrl::StrictMode);
-    const bool datagram = url.scheme()==QLatin1String("rtp") || url.scheme()==QLatin1String("udp");
-    if(!url.isValid()||url.host().isEmpty()||(datagram&&url.port()<=0)
-       ||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
-        emit notice(tr("请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址"),true);return false;
-    }
-    openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
-}
 
 void QmlPlayerBridge::bringToFront() {
     // Windows 只允许前台进程直接 SetForegroundWindow。点击发生在浏览器里，
@@ -373,10 +238,6 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
-    if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||
-       (s.transport==T::Paused&&s.duration<=0&&!s.network.timeshiftEnabled))){
-        openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
-    }
     // Capture cards and streams pause too (field request 2026-10-02): the engine stops
     // reading and enhancing, keeps the last picture and resets the source's queue, so
     // play resumes with the newest frame rather than a backlog. The connection stays up.
@@ -387,12 +248,7 @@ void QmlPlayerBridge::togglePlayPause() {
         emit notice(pause ? tr("已暂停：画面停在当前帧，不再处理新画面；点播放继续") : tr("已继续"), false);
         return;
     }
-    if (!s.running || s.transport == T::Ended) {
-        // Only a real file is reopened; device/stream labels are not paths.
-        const QString file = QString::fromStdWString(impl_->sourceLabel);
-        if (!file.isEmpty() && QFileInfo(file).isFile()) openPath(file);
-        return;
-    }
+    if (!s.running || s.transport == T::Ended) return;
     const bool pause = s.transport == T::Playing;
     impl_->engine.pause(pause);
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
@@ -400,14 +256,11 @@ void QmlPlayerBridge::togglePlayPause() {
 void QmlPlayerBridge::stopPlayback() {
     impl_->screenCropPreview = false;
     flushHdrMemory();
-    impl_->playlistSession = 0;
-    impl_->playlist->setPlayback(impl_->playlistPath, QStringLiteral("stopped"));
     rememberPosition(true);
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();
     impl_->openingSource = false;
     impl_->openingSessionId = 0;
     impl_->engine.stop();
-    stopPs5Control();
 }
 void QmlPlayerBridge::seekTo(double seconds) {
     if(!timelineSeekable())return;
@@ -416,16 +269,6 @@ void QmlPlayerBridge::seekTo(double seconds) {
 }
 void QmlPlayerBridge::seekBy(double seconds) {
     seekTo(std::max(0.0, impl_->snapshot.position + seconds));
-}
-void QmlPlayerBridge::openUrl(const QUrl& url) {
-    if(!url.isLocalFile()){openNetworkAddress(url.toString(QUrl::FullyEncoded));return;}
-    if (!url.isLocalFile()) {
-        emit notice(tr("只能打开本地文件"), true);
-        return;
-    }
-    // Opened inside the drop, as AppShell's WM_DROPFILES does.
-    veyra::log::info("ui-drop", url.toLocalFile().toStdString());
-    openPath(QDir::toNativeSeparators(url.toLocalFile()));
 }
 void QmlPlayerBridge::logUi(const QString& channel, const QString& text) {
     const std::string c = channel.toStdString();
@@ -451,7 +294,7 @@ void QmlPlayerBridge::stepFrame(int direction) {
 
 void QmlPlayerBridge::takeScreenshot() {
     if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法截图"), true); return; }
-    if(!impl_->pendingScreenshot.isEmpty()||!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
+    if(!impl_->pendingScreenshot.isEmpty()){emit notice(tr("请等待当前图片导出完成"),true);return;}
     const QString folder = screenshotDirectory();
     if (!QDir().mkpath(folder)) { emit notice(tr("截图目录不可用：%1").arg(folder), true); return; }
     const QString name = QStringLiteral("veyra-%1.png")
@@ -465,27 +308,6 @@ void QmlPlayerBridge::takeScreenshot() {
     emit preferencesChanged();
 }
 
-// ---- network / server playback (#48) ------------------------------------------------
-bool QmlPlayerBridge::networkActive() const { return impl_->snapshot.network.active; }
-bool QmlPlayerBridge::networkHolding() const {
-    const auto& n = impl_->snapshot.network;
-    return n.active && (n.holding() || n.state == media::NetworkStats::State::Reconnecting);
-}
-QString QmlPlayerBridge::networkSummary() const {
-    const auto& n = impl_->snapshot.network;
-    if (!n.active) return {};
-    QStringList parts;
-    parts << tr("缓冲 %1 s").arg(n.bufferedSeconds, 0, 'f', 1);
-    parts << (n.downloadBytesPerSecond > 0 ? tr("下载 %1 MB/s").arg(n.downloadBytesPerSecond / 1048576.0, 0, 'f', 1)
-                                           : tr("下载 —"));
-    parts << tr("重连 %1").arg(n.reconnects);
-    if (const uint64_t lost = std::max(n.corruptPackets, n.corruptFrames); lost > 0) parts << tr("丢包 %1").arg(qulonglong(lost));
-    return parts.join(QStringLiteral(" · "));
-}
-QString QmlPlayerBridge::networkNotice() const {
-    const auto& n = impl_->snapshot.network;
-    return n.active ? uiText(n.message) : QString();
-}
 
 
 } // namespace veyra::ui

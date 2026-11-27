@@ -370,51 +370,17 @@ bool QmlPlayerBridge::audioSkewKnown() const {
     return audioSyncLive() && skew.has_value() && std::isfinite(*skew) && std::abs(*skew) < 5000.0;
 }
 
-QString QmlPlayerBridge::exportSizeEstimate() const {
-    const auto gb = [](double bytes) {
-        return bytes >= 1024.0 * 1024 * 1024 ? QStringLiteral("%1 GB").arg(bytes / (1024.0 * 1024 * 1024), 0, 'f', 2)
-                                            : QStringLiteral("%1 MB").arg(bytes / (1024.0 * 1024), 0, 'f', 0);
-    };
-    if (exportRunning()) {
-        const double progress = exportProgress();
-        const QFileInfo partial(exportTarget() + QStringLiteral(".partial"));
-        if (progress > 0.02 && partial.exists() && partial.size() > 0)
-            return tr("预计约 %1（按已写入 %2 推算）").arg(gb(partial.size() / progress)).arg(gb(double(partial.size())));
-        return tr("开始写入后按已写入量推算");
-    }
-    const double end = impl_->exportTrimEndSeconds > 0 ? impl_->exportTrimEndSeconds : impl_->snapshot.duration;
-    const double seconds = std::max(0.0, end - impl_->exportTrimStartSeconds);
-    if (seconds <= 0) return QString();
-    if (impl_->exportBitrateMbps > 0)
-        return tr("约 %1（视频 %2 Mbps × %3，音轨另计）").arg(gb(impl_->exportBitrateMbps * 1e6 / 8.0 * seconds))
-            .arg(impl_->exportBitrateMbps).arg(formatTime(seconds));
-    return tr("恒定质量：大小取决于画面，开始后按已写入量推算");
-}
 
 QVariantMap QmlPlayerBridge::lastSource() const {
     auto saved = impl_->prefs.value(QStringLiteral("lastSource")).toMap();
     const QString kind = saved.value(QStringLiteral("kind")).toString();
-    if (kind == QLatin1String("file")) {
-        saved[QStringLiteral("summary")]=QFileInfo(saved.value(QStringLiteral("label")).toString()).fileName();
-    } else if (kind == QLatin1String("capture")) {
-        if (!hasCaptureSession()) return {};
-        saved[QStringLiteral("summary")] = captureSessionSummary();
-    } else if (kind == QLatin1String("ps5")) {
-        saved[QStringLiteral("summary")] = tr("PS5 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
-    } else if (kind == QLatin1String("moonlight")) {
-        saved[QStringLiteral("summary")] = tr("PC 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
-    } else if (kind == QLatin1String("xbox")) {
-        saved[QStringLiteral("summary")] = tr("Xbox 串流 · %1").arg(saved.value(QStringLiteral("label")).toString());
-    } else if (kind == QLatin1String("screen")) {
-        saved[QStringLiteral("summary")] = tr("屏幕捕获 · %1").arg(saved.value(QStringLiteral("label")).toString());
-    } else if (hasCaptureSession()) {
-        // Before this was recorded, only capture sessions were remembered.
-        return QVariantMap{{"kind", "capture"}, {"summary", captureSessionSummary()}};
-    } else return {};
+    // Veyra PLUS: screen capture is the only source that can be resumed.
+    if (kind != QLatin1String("screen")) return {};
+    saved[QStringLiteral("summary")] = tr("屏幕捕获 · %1").arg(saved.value(QStringLiteral("label")).toString());
     return saved;
 }
 void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) {
-    if(kind!=QLatin1String("file")){impl_->liveKind = kind;impl_->liveLabel = label;}
+    impl_->liveKind = kind;impl_->liveLabel = label;
     QVariantMap value{{"kind", kind}, {"label", label}};
     if (kind == QLatin1String("screen")) value[QStringLiteral("screenKind")] = screenOptions().value(QStringLiteral("kind")).toInt();
     if (impl_->prefs.value(QStringLiteral("lastSource")).toMap() == value) return;
@@ -426,10 +392,7 @@ void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     if(!impl_->prefBool("autoResume",false)||impl_->openingSource||impl_->snapshot.running)return;
     const auto last = lastSource();
     if(last.isEmpty())return;
-    if (!allowCapture && last.value(QStringLiteral("kind")).toString() == QLatin1String("capture")) {
-        veyra::log::info("ui-startup", "automatic capture skipped while another Veyra holds the primary log");
-        return;
-    }
+    (void)allowCapture;
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
 }
@@ -437,43 +400,6 @@ void QmlPlayerBridge::resumeLastSource() {
     const auto last = lastSource();
     const QString kind = last.value(QStringLiteral("kind")).toString();
     veyra::log::info("ui-resume-source", "kind=" + kind.toStdString());
-    if(kind==QLatin1String("file")){
-        const QString path=last.value(QStringLiteral("label")).toString();
-        if(!QFileInfo(path).isFile()){emit notice(tr("上次的视频文件不存在：%1").arg(path),true);return;}
-        openPath(path);return;
-    }
-    if (kind == QLatin1String("capture")) { resumeCaptureSession(); return; }
-    if (kind == QLatin1String("ps5")) {
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-        ps5Load();
-        if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
-#else
-        emit notice(tr("此版本不含 PS5 串流"), true);
-#endif
-        return;
-    }
-    if (kind == QLatin1String("xbox")) {
-#ifdef VEYRA_ENABLE_XBOX
-        if (!impl_->xbox || !impl_->xbox->resumeLast()) {
-            emit notice(tr("没能继续上次的 Xbox 串流，请在 Xbox 串流窗口里重新选择"), true);
-            emit navigate(QStringLiteral("xbox"));
-        }
-#else
-        emit notice(tr("此版本不含 Xbox 串流"), true);
-#endif
-        return;
-    }
-    if (kind == QLatin1String("moonlight")) {
-#ifdef VEYRA_ENABLE_MOONLIGHT
-        if (!impl_->moonlight || !impl_->moonlight->resumeLast()) {
-            emit notice(tr("没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择"), true);
-            emit navigate(QStringLiteral("moonlight"));
-        }
-#else
-        emit notice(tr("此版本不含 PC 串流"), true);
-#endif
-        return;
-    }
     if (kind == QLatin1String("screen")) {
         const int screenKind = last.value(QStringLiteral("screenKind")).toInt();
         if (screenOptions().value(QStringLiteral("kind")).toInt() != screenKind) setScreenOption(QStringLiteral("kind"), screenKind);

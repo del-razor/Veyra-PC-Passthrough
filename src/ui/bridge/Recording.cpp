@@ -166,54 +166,8 @@ void QmlPlayerBridge::openRecordingDirectory() {
     if (!QDesktopServices::openUrl(QUrl::fromLocalFile(dir))) emit notice(tr("无法打开目录：%1").arg(dir), true);
 }
 
-void QmlPlayerBridge::chooseExportPath() {
-    if (impl_->chain.mode == engine::ChainMode::Node) {
-        emit notice(tr("节点链尚未接入导出执行器，请切换列表模式后导出"), true);
-        return;
-    }
-    const QString path = QFileDialog::getExistingDirectory(nullptr,tr("选择导出目录"),exportTarget());
-    setExportPath(path);
-}
 
-void QmlPlayerBridge::setExportPath(const QString& path) {
-    if (path.isEmpty()) return;
-    impl_->exportOutput = wideOf(path);
-    impl_->exportStatus = QFileInfo(path).fileName();
-    emit exportChanged();
-}
 
-void QmlPlayerBridge::startExport() {
-    QString error;auto settings=impl_->exportSettings(error);
-    if(!settings){emit notice(error,true);return;}
-    if(impl_->exportQueue.count()==0){
-        if(!QFileInfo(utf8Of(impl_->sourceLabel)).isFile()){emit notice(tr("请先添加要导出的文件"),true);return;}
-        const QString target=exportTarget();
-        const bool fileTarget=!target.isEmpty()&&!QFileInfo(target).isDir();
-        const auto id=impl_->exportQueue.addFile(utf8Of(impl_->sourceLabel),fileTarget?target:QString());
-        impl_->exportQueue.queue().setTrim(id,impl_->exportTrimStartSeconds,impl_->exportTrimEndSeconds);
-        impl_->exportQueue.setSelectedId(id);
-    }
-    if(impl_->exportOutput.empty())chooseExportPath();
-    if(impl_->exportOutput.empty())return;
-    const QFileInfo target(exportTarget());
-    const QString folder=target.isDir()?target.absoluteFilePath():target.absolutePath();
-    std::wstring reason;
-    if(!impl_->exportQueue.queue().start(wideOf(folder),*settings,impl_->exportHevc,impl_->exportRateControl,reason)){
-        emit notice(uiText(reason),true);emit exportChanged();return;
-    }
-    veyra::log::info("qml-export",std::format("export frozen bitrateMbps={} rateControl={} hevc={} srTarget={} srPrescale={} srOutput={}",
-        settings->exportBitrateMbps,int(impl_->exportRateControl),impl_->exportHevc,int(settings->srTarget),uint32_t(settings->srPrescale),uint32_t(settings->srOutput)));
-    impl_->exportQueue.refresh();pollExport();emit navigate(QStringLiteral("exp"));
-    // Leave the GPU to the export (field request 2026-10-02): whatever plays is closed,
-    // unless 导出页 → 导出时关闭正在播放的内容 is off.
-    if(impl_->prefBool("exportStopsPlayback",true)&&(hasSource()||impl_->openingSource)){
-        veyra::log::info("qml-export","export started: closing the playing source");
-        stopPlayback();emit notice(tr("已关闭正在播放的内容，显卡全部留给导出"),false);
-    }
-}
-void QmlPlayerBridge::cancelExport() {
-    impl_->exportQueue.queue().cancel();impl_->exportQueue.refresh();pollExport();emit exportChanged();
-}
 
 void QmlPlayerBridge::restartApplication() {
     requestApplicationRestart(false);
@@ -222,10 +176,6 @@ void QmlPlayerBridge::restartForOverlayCompatibility() {
     requestApplicationRestart(true);
 }
 void QmlPlayerBridge::requestApplicationRestart(bool overlayCompatibility) {
-    if (exportRunning()) {
-        emit notice(tr("设置已保存，请等待导出结束后重启软件"), true);
-        return;
-    }
     rememberPosition(true);
     qApp->setProperty("veyraOverlayCompatRestart", overlayCompatibility);
     // main launches the replacement only after UI/engine owners unwind.
@@ -238,10 +188,8 @@ void QmlPlayerBridge::quit() {
 }
 
 void QmlPlayerBridge::openCaptureDialog() { emit navigate(QStringLiteral("capture")); }
-void QmlPlayerBridge::openPs5Dialog() { emit navigate(QStringLiteral("ps5")); }
 void QmlPlayerBridge::openScreenCaptureDialog() { emit navigate(QStringLiteral("screen")); }
 void QmlPlayerBridge::openAudioDialog() { emit navigate(QStringLiteral("audio")); }
-void QmlPlayerBridge::openSubtitleDialog() { emit navigate(QStringLiteral("subtitle")); }
 
 
 } // namespace veyra::ui

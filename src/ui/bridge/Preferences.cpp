@@ -60,11 +60,6 @@ void QmlPlayerBridge::setCurrentPage(const QString& value) {
     }
 }
 
-QString QmlPlayerBridge::remotePlayState() const {
-    // The engine's own remote-play state word, or empty when there is none. No
-    // invented "connected" wording.
-    return uiText(impl_->snapshot.remoteRecoveryMessage);
-}
 
 QVariantList QmlPlayerBridge::componentList() const {
     if (!impl_->componentListRead) { impl_->componentList = readComponentList(); impl_->componentListRead = true; }
@@ -405,7 +400,6 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
                     notify.invoke(this, Qt::DirectConnection);
                 }
             }
-            impl_->exportQueue.refresh();
         }
     }
     else if (key == QLatin1String("monitorGpu") || key == QLatin1String("computeOnMonitorGpu")) {
@@ -770,7 +764,6 @@ QString QmlPlayerBridge::sourceKind() const {
     const auto& s = impl_->snapshot;
     if (!hasSource()) return {};
     if (s.image) return QStringLiteral("image");
-    if (s.remotePlay) return QStringLiteral("ps5");
     if (!impl_->liveKind.isEmpty()) return impl_->liveKind;
     if (s.capture) return QStringLiteral("capture");
     return QStringLiteral("file");
@@ -778,15 +771,11 @@ QString QmlPlayerBridge::sourceKind() const {
 QString QmlPlayerBridge::sourceTitle() const {
     const QString kind = sourceKind();
     if (kind.isEmpty()) return {};
-    if(kind==QLatin1String("url"))return tr("网络视频 · %1").arg(impl_->liveLabel);
     if (kind == QLatin1String("file") || kind == QLatin1String("image")) return sourceName();
     if (kind == QLatin1String("capture")) {
         const QString name = impl_->prefString("captureDeviceName");
         return tr("采集卡 · %1").arg(name.isEmpty() ? impl_->liveLabel : name);
     }
-    if (kind == QLatin1String("ps5")) return tr("PS5 串流 · %1").arg(impl_->liveLabel);
-    if (kind == QLatin1String("moonlight")) return tr("PC 串流 · %1").arg(impl_->liveLabel);
-    if (kind == QLatin1String("xbox")) return tr("Xbox 串流 · %1").arg(impl_->liveLabel);
     return tr("屏幕捕获 · %1").arg(impl_->liveLabel);
 }
 // "1080p60" / "1080p59.94": the reported height and nominal rate only.
@@ -884,93 +873,6 @@ bool QmlPlayerBridge::colourPaste() {
     return ok;
 }
 
-QVariantList QmlPlayerBridge::exportItems() const {
-    QVariantList result;for(int i=0;i<impl_->exportQueue.count();++i)result<<impl_->exportQueue.get(i);return result;
-}
-void QmlPlayerBridge::addCurrentExportFile(){
-    if(!QFileInfo(utf8Of(impl_->sourceLabel)).isFile())return;
-    const auto id=impl_->exportQueue.addFile(utf8Of(impl_->sourceLabel));
-    impl_->exportQueue.queue().setTrim(id,impl_->exportTrimStartSeconds,impl_->exportTrimEndSeconds);
-    impl_->exportQueue.setSelectedId(id);emit exportChanged();
-}
-QObject* QmlPlayerBridge::exportQueueModel() const{return &impl_->exportQueue;}
-int QmlPlayerBridge::exportContainer()const{return impl_->exportContainer;}
-void QmlPlayerBridge::setExportContainer(int value){
-    if(value<0||value>1||value==impl_->exportContainer)return;
-    impl_->exportContainer=value;impl_->exportQueue.queue().setContainer(static_cast<engine::ExportContainer>(value));
-    impl_->exportQueue.refresh();
-}
-int QmlPlayerBridge::exportReadyCount()const{return int(impl_->exportQueue.queue().readyCount());}
-bool QmlPlayerBridge::exportSelectionEditable()const{
-    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());
-    return item&&item->state!=engine::ExportItemState::Running&&item->state!=engine::ExportItemState::Queued;
-}
-int QmlPlayerBridge::exportAudioPolicy()const{
-    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());return item?int(item->media.audio.policy):1;
-}
-int QmlPlayerBridge::exportSubtitlePolicy()const{
-    const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());return item?int(item->media.subtitles.policy):1;
-}
-QVariantList QmlPlayerBridge::exportTracks()const{
-    QVariantList result;const auto* item=impl_->exportQueue.queue().find(impl_->exportQueue.selectedId());if(!item)return result;
-    for(const auto& track:item->info.tracks){const auto& selection=track.audio?item->media.audio:item->media.subtitles;
-        const bool selected=selection.policy==engine::ExportTrackPolicy::All||selection.contains(track.index);
-        result<<QVariantMap{{"index",track.index},{"audio",track.audio},{"selected",selected},{"compatible",track.compatible},
-            {"label",QStringLiteral("%1 · %2 · %3%4").arg(track.index).arg(utf8Of(track.codec)).arg(utf8Of(track.language)).arg(track.channels?tr(" · %1 声道").arg(track.channels):QString())},
-            {"title",utf8Of(track.title)},{"action",uiText(track.action)}};
-    }
-    return result;
-}
-void QmlPlayerBridge::setExportTrackPolicy(bool audio,int policy){
-    if(policy<1||policy>3)return;
-    auto& queue=impl_->exportQueue.queue();const auto id=impl_->exportQueue.selectedId();const auto* item=queue.find(id);if(!item)return;
-    engine::ExportTrackSelection selection;selection.policy=static_cast<engine::ExportTrackPolicy>(policy);
-    if(selection.policy==engine::ExportTrackPolicy::Selected){
-        for(const auto& track:item->info.tracks)if(track.audio==audio){selection.indices[0]=track.index;selection.count=1;break;}
-        if(!selection.count){emit notice(tr("该文件没有可选轨道"),true);return;}
-    }
-    if(queue.setTracks(id,audio,selection))impl_->exportQueue.refresh();
-}
-void QmlPlayerBridge::toggleExportTrack(bool audio,int index,bool keep){
-    auto& queue=impl_->exportQueue.queue();const auto id=impl_->exportQueue.selectedId();const auto* item=queue.find(id);if(!item)return;
-    const auto& previous=audio?item->media.audio:item->media.subtitles;
-    engine::ExportTrackSelection selection;selection.policy=engine::ExportTrackPolicy::Selected;
-    for(const auto& track:item->info.tracks)if(track.audio==audio){
-        // Leaving "all" keeps what "all" actually carried: tracks it skipped for
-        // this container stay out instead of turning into a hard failure.
-        const bool selected=track.index==index?keep:previous.policy==engine::ExportTrackPolicy::All?track.compatible:previous.contains(track.index);
-        if(selected){if(selection.count>=selection.indices.size()){emit notice(tr("手动选择最多 64 条；保留全部不限制轨道数量"),true);return;}selection.indices[selection.count++]=track.index;}
-    }
-    if(!selection.count)selection.policy=engine::ExportTrackPolicy::None;
-    if(queue.setTracks(id,audio,selection))impl_->exportQueue.refresh();
-}
-void QmlPlayerBridge::previewExportItem(qulonglong id){
-    const auto* item=impl_->exportQueue.queue().find(id);if(!item)return;
-    const QString input=utf8Of(item->input);const double start=item->start,end=item->end;
-    if(input!=utf8Of(impl_->sourceLabel))openPath(input);
-    impl_->exportQueue.setSelectedId(id);impl_->exportTrimStartSeconds=start;impl_->exportTrimEndSeconds=end;
-    emit exportChanged();
-}
-bool QmlPlayerBridge::exportCompletionSound()const{return impl_->prefs.value(QStringLiteral("exportCompletionSound"),true).toBool();}
-void QmlPlayerBridge::setExportCompletionSound(bool enabled){
-    const auto previous=impl_->prefs;impl_->prefs[QStringLiteral("exportCompletionSound")]=enabled;
-    if(!impl_->savePrefs()){impl_->prefs=previous;emit notice(tr("提示音设置保存失败"),true);}
-    emit exportChanged();
-}
-void QmlPlayerBridge::clearFinishedExportItems() {
-    for(int row=impl_->exportQueue.count()-1;row>=0;--row){const auto& item=impl_->exportQueue.queue().items()[row];
-        if(item.state==engine::ExportItemState::Done||item.state==engine::ExportItemState::Failed||item.state==engine::ExportItemState::Cancelled)impl_->exportQueue.removeItem(item.id);
-    }
-    emit exportChanged();
-}
-// A thumbnail of any file (export queue rows), through the same provider.
-QString QmlPlayerBridge::fileThumbnailId(const QString& path, double seconds) const {
-    if (path.isEmpty()) return {};
-    return QStringLiteral("image://veyra-thumb/file/%1/%2/%3")
-        .arg(impl_->thumbnailGeneration)
-        .arg(QString::fromLatin1(path.toUtf8().toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals)))
-        .arg(qint64(std::max(0.0, seconds) * 1000.0));
-}
 
 QString QmlPlayerBridge::capturePreviewUrl() const {
     const auto& s = impl_->snapshot;

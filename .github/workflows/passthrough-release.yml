@@ -9,7 +9,7 @@ name: Veyra PLUS release
 on:
   workflow_dispatch:
   push:
-    branches: ['passthrough']
+    branches: ['passthrough', 'strip']
 
 permissions:
   contents: write
@@ -157,6 +157,7 @@ jobs:
           cmake --build C:\b --parallel --target veyra_qml_ui *>&1 | Tee-Object -FilePath C:\logs\build.log | Select-Object -Last 400
 
       - name: Download the official packages of this version
+        if: github.ref_name == 'passthrough'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -168,6 +169,7 @@ jobs:
           Get-ChildItem C:\official | Format-Table Name, Length | Out-String | Write-Host
 
       - name: Prepare Inno Setup
+        if: github.ref_name == 'passthrough'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -202,6 +204,7 @@ jobs:
           python -m pip install --quiet pillow
 
       - name: Repack NVIDIA and AMD packages with this player
+        if: github.ref_name == 'passthrough'
         run: |
           New-Item -ItemType Directory -Force C:\release, C:\work | Out-Null
           foreach ($zip in Get-ChildItem C:\official\*-win64-portable.zip) {
@@ -215,6 +218,7 @@ jobs:
           Get-Content C:\release\SHA256SUMS.txt | Write-Host
 
       - name: Create or update the release
+        if: github.ref_name == 'passthrough'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

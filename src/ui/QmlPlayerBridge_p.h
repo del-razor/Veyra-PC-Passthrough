@@ -19,8 +19,6 @@
 #include <QScopedValueRollback>
 #include "veyra/ui/EffectAvailability.h"
 #include "veyra/engine/FrameGenerationSelection.h"
-#include "veyra/ui/QmlExportQueueModel.h"
-#include "veyra/ui/PlaylistModel.h"
 #include "veyra/ui/UpdateChecker.h"
 #include "veyra/ui/UiLanguage.h"
 #include <QQmlEngine>
@@ -81,25 +79,6 @@
 #include "veyra/source/CaptureFrameRate.h"
 #include "veyra/source/MagewellCapture.h"
 #include "CapturePreferenceStore.h"
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-// SDL3-static's system libraries (see CMakeLists: kept off the link line).
-#pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "imm32.lib")
-#pragma comment(lib, "version.lib")
-#pragma comment(lib, "setupapi.lib")
-#pragma comment(lib, "dinput8.lib")
-#include "veyra/remoteplay/ControllerInput.h"
-#include "veyra/remoteplay/Discovery.h"
-#include "veyra/remoteplay/ProfileStore.h"
-#include "veyra/source/RemotePlaySource.h"
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-#include "veyra/ui/XboxModel.h"
-#endif
-#ifdef VEYRA_ENABLE_MOONLIGHT
-#include "veyra/ui/MoonlightInputCapture.h"
-#include "veyra/ui/MoonlightModel.h"
-#endif
 #include <future>
 #include <functional>
 #include <map>
@@ -279,7 +258,6 @@ struct QmlPlayerBridge::Impl {
     // The window the engine presents into, and the last file the UI opened.
     HWND videoWindow = nullptr;
     std::wstring sourceLabel;
-    int thumbnailGeneration = 0;
     // The live source kind and label ("" for a file), for the page headers.
     QString liveKind, liveLabel;
     // A live open waiting for the destination page to settle; the
@@ -304,38 +282,13 @@ struct QmlPlayerBridge::Impl {
     PlaybackPowerGuard power;
     std::function<void()> preOpen;
 
-    // Export progress is mirror state: the engine reports an export through a
-    // progress callback, and there is no export status in PlayerSnapshot yet.
-    bool exportRunning = false;
-    std::wstring exportOutput;
-    QString exportStatus;
     engine::PlayerOptions options;
-
-    // The export job manager is the real thing: state, progress and encoded
-    // counts come from its snapshot.
-    engine::ExportJobManager exportJob;
-    QmlExportQueueModel exportQueue{exportJob};
-    int exportContainer=0;
-    uint64_t exportNotifiedBatch=0;
-    QString pendingFrameExport;
-    qint64 pendingFrameDeadline=0;
-    uint64_t imageCompletionEvent=0;
-    engine::ExportJobSnapshot exportSnapshot;
-    bool exportHevc = false;
-    // Default: VBR at 8 Mbps (field request 2026-10-02); CQ stays one tap away.
-    uint32_t exportBitrateMbps = 8;
-    sink::ExportRateControl exportRateControl = sink::ExportRateControl::Vbr;
-    int exportResolutionIndex = -1;
-    double exportTrimStartSeconds = 0.0;
-    double exportTrimEndSeconds = 0.0;
-    std::wstring exportPresetName;
     std::wstring lastAppliedPresetName;
     QString initialPageOverride;
     QString currentPage;
     std::wstring captureDevice;
     QString screenTarget;
     bool screenCropPreview = false;
-    QString remotePlayHost, remotePlayPin;
 
     QTimer* timer = nullptr;
 
@@ -345,9 +298,6 @@ struct QmlPlayerBridge::Impl {
     QVariantMap anchors;
     // Where the user's own files live (the facade resolves the same default).
     std::filesystem::path dataDir;
-    PlaylistModel* playlist = nullptr;
-    QString playlistPath;
-    uint64_t playlistSession = 0, playlistCompletedSession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
     // Embedded-subtitle scan of a file on a server (#48): reads only while playback has its own
@@ -474,45 +424,6 @@ struct QmlPlayerBridge::Impl {
     double captureFps = 0;
     QString captureStatus;
     ui::CapturePreferences capturePrefs;
-    // --- PS5 Remote Play ---
-    QVariantMap ps5Form;
-    QString ps5Status;
-    std::wstring ps5Profile;                 // file name inside profileDirectory()
-    QVariantList ps5ProfileList;
-    bool ps5Watching = false;
-    struct Ps5Outcome { std::wstring message; std::vector<std::pair<std::string, std::string>> hosts; std::wstring savedPath; bool refreshProfiles = false; };
-    std::mutex ps5Mutex;
-    Ps5Outcome ps5Outcome;
-    std::atomic<bool> ps5Done{false};
-    bool ps5Busy = false;
-    QTimer* controllerTimer = nullptr;
-    // PS5 手柄控制 (capture card dialog).
-    QTimer* ps5ControlTimer = nullptr;
-    QVariantMap ps5ControlState;
-    std::wstring ps5ControlProfile;          // pairing (or test host) the session was started with
-    QString ps5ControlNoticed;               // state the last notice was shown for
-    int ps5ControlTicks = 0;
-    bool ps5ControlNoPair = false;           // switched on without a pairing; cleared once pairings exist
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    remoteplay::ControllerInput controller;
-    // One SDL pad reader shared by PS5 stream, PS5 手柄控制, PC and Xbox streaming.
-    // Each user acquires it and only the last release stops it, so the timer of a
-    // source that just ended never cuts off the pad the next source started using.
-    enum PadUser : unsigned { PadPs5 = 1, PadPs5Control = 2, PadMoonlight = 4, PadXbox = 8 };
-    unsigned padUsers = 0;
-    bool acquirePad(unsigned user) {
-        const bool ok = controller.start(); // no-op once initialized
-        padUsers |= user;
-        controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
-        return ok;
-    }
-    void releasePad(unsigned user) {
-        padUsers &= ~user;
-        if (!padUsers) controller.stop();
-        else controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
-    }
-#endif
-    std::jthread ps5Worker;                  // last: joined before what it touches
     // --- screen capture ---
     std::vector<source::ScreenCaptureTarget> screenList;
     bool screenFillActive = false;
@@ -765,63 +676,6 @@ struct QmlPlayerBridge::Impl {
         options = engine::PlayerOptions::from(facade.pendingSettings());
     }
 
-    std::optional<engine::EnhancementSettings> exportSettings(QString& error) const {
-        if (chain.mode == engine::ChainMode::Node) {
-            error = QObject::tr("节点链尚未接入导出执行器，请切换列表模式后导出");
-            return std::nullopt;
-        }
-        auto settings = facade.pendingSettings();
-        engine::fromChain(chain, settings);
-        if (!exportPresetName.empty()) {
-            const auto& entries = facade.presets().entries();
-            const auto preset = std::find_if(entries.begin(), entries.end(), [this](const auto& entry) {
-                return entry.name == exportPresetName;
-            });
-            if (preset == entries.end()) {
-                error = QObject::tr("导出预设已不存在，请重新选择");
-                return std::nullopt;
-            }
-            if (preset->kind != engine::ChainMode::List) {
-                error = QObject::tr("节点预设尚未接入导出执行器");
-                return std::nullopt;
-            }
-            engine::PresetLibrary::apply(*preset, settings);
-        }
-        settings.exportBitrateMbps = exportBitrateMbps;
-        if (exportResolutionIndex >= 0) {
-            settings.sr = exportResolutionIndex != 0;
-            if (settings.sr) {
-                switch (exportResolutionIndex) {
-                case 1: settings.srTarget = pipeline::SrTarget::Qhd; break;
-                case 2: settings.srTarget = pipeline::SrTarget::Uhd4K; break;
-                case 3: settings.srTarget = pipeline::SrTarget::Uhd8K; break;
-                case 4: settings.srTarget = pipeline::SrTarget::Uhd5K; break;
-                case 5: settings.srTarget = pipeline::SrTarget::Uhd6K; break;
-                case 6: settings.srTarget = pipeline::SrTarget::Uhd7K; break;
-                default: break;
-                }
-            }
-        }
-        if (exportRateControl != sink::ExportRateControl::Cq && !exportBitrateMbps) {
-            error = QObject::tr("CBR/VBR 需要指定码率");
-            return std::nullopt;
-        }
-        if (const auto why = settings.validate(); !why.empty()) {
-            veyra::log::warn("export-settings", std::format("invalid: {} bitrateMbps={}", why, settings.exportBitrateMbps));
-            error = QObject::tr("导出设置无效：%1").arg(utf8Of(why));
-            return std::nullopt;
-        }
-        if (const auto why = unavailableEffects(settings); !why.isEmpty()) {
-            error = QObject::tr("导出设置无效：%1").arg(why);
-            return std::nullopt;
-        }
-        if(settings.multiplier>1&&engine::presentSinkFrameGeneration(settings.frameGenerationBackend)){
-            error=QObject::tr("XeSS 尚未提供可编码的补帧纹理，请为导出选择 FSR、DLSS 或 VFG 补帧");
-            return std::nullopt;
-        }
-        return settings;
-    }
-
     engine::ChainSession currentSession() const {
         auto current = session;
         current.originalHalfRate = facade.pendingSettings().content == engine::ContentRate::Capture60To30Original;
@@ -988,20 +842,6 @@ struct QmlPlayerBridge::Impl {
         options = engine::PlayerOptions::from(s,order);
         return true;
     }
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    // --- PC streaming (Moonlight). Last, so they are destroyed first: the model joins its workers.
-    QTimer* moonlightTimer = nullptr;
-    bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
-    int moonlightStatsTicks = 0;
-    std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
-    std::unique_ptr<ui::MoonlightModel> moonlight;
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-    QTimer* xboxTimer = nullptr;
-    bool xboxWasActive = false;
-    int xboxStatsTicks = 0;
-    std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
-#endif
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.

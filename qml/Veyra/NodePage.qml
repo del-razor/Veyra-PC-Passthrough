@@ -441,8 +441,7 @@ VPage {
                         Layout.maximumWidth: implicitWidth
                         Layout.fillWidth: statsBar.compact
                         objectName: "node-source-button"
-                        iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
-                                : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
+                        iconName: "monitor"
                         text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
                         maxTextWidth: 180
                         trailingIcon: "down"
@@ -807,15 +806,6 @@ VPage {
                             }
                             VSliderValue { slider: nodeVolume; text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; pixelSize: 10 }
                             VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
-                        }
-                        VRow {
-                            visible: veyra.sourceKind === "capture"
-                            label: qsTr("本机音频监听")
-                            VSwitch {
-                                objectName: "node-out-capture-monitor"
-                                checked: veyra.preferences.captureAudioMonitor !== false
-                                onToggled: value => veyra.setPreference("captureAudioMonitor", value)
-                            }
                         }
                         VSeg {
                             objectName: "node-out-sync"
@@ -1873,22 +1863,9 @@ VPage {
         title: qsTr("片源")
         items: (veyra.sourceTitle.length > 0
                 ? [{ label: veyra.sourceTitle, note: veyra.sourceFormatText, checked: true, icon: "video", act: "" }] : [])
-            .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
-                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
-                     { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
-                     { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
-                     { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
-                     { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
-                     { sep: true },
-                     { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }].filter(Theme.plusSource))
+            .concat([{ label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" }])
         onPicked: (i, o) => {
-            if (o.act === "file") veyra.openFileDialog()
-            else if (o.act === "network") veyra.openNetworkDialog()
-            else if (o.act === "ps5") veyra.openPs5Dialog()
-            else if (o.act === "moonlight") veyra.openMoonlightDialog()
-            else if (o.act === "xbox") veyra.openXboxDialog()
-            else if (o.act === "screen") veyra.openScreenCaptureDialog()
-            else if (o.act === "capture") veyra.openCaptureDialog()
+            if (o.act === "screen") veyra.openScreenCaptureDialog()
         }
     }
     VConfirm {

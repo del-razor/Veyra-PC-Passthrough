@@ -73,16 +73,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
-    impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
-    connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
-        openPath(path);
-        // Explicit playlist selection starts at the beginning; opening from
-        // recent files retains the existing resume-position preference.
-        impl_->resumeSession = 0;
-    });
-    connect(impl_->playlist, &PlaylistModel::error, this, [this](const QString& text) {
-        veyra::log::warn("playlist", text.toStdString()); emit notice(text, true);
-    });
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
@@ -124,10 +114,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
     applyPreference(QStringLiteral("fullscreenFrameStats"));
-#ifdef VEYRA_ENABLE_REMOTEPLAY
-    impl_->engine.setRemotePlayTouchpadPressOnly(impl_->prefBool("ps5TouchpadPressOnly",false));
-#endif
-    connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
     // 游戏模式. The native filter also keeps windows shown during a monitor capture
     // out of that capture, so it is installed for every run.
@@ -168,12 +154,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         updateGameGeometry();
     });
     gameBeat->start(250);
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    setupMoonlight();
-#endif
-#ifdef VEYRA_ENABLE_XBOX
-    setupXbox();
-#endif
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("language"));
     applyPreference(QStringLiteral("updateDownloadRoute"));
@@ -494,11 +474,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         updateMaskOverlay();
         tickSubtitles();
-        tickImageBatch();
         tickCapture();
-        tickPs5();
-        tickMoonlight();
-        tickXbox();
         // Geometry uses the source DAR and the same transform as mouse/compare.
         if (impl_->snapshot.running && impl_->videoWindow) {
             const bool fresh = impl_->aspectSession != impl_->snapshot.sessionId;
@@ -642,10 +618,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 }
             }
         }
-        // An export in flight needs its own poll; it is a separate job and its
-        // snapshot is not part of the player snapshot.
-        if (impl_->exportQueue.queue().needsTick()) pollExport();
-        tickPlaylist();
         updateGameMode();
     });
     impl_->timer->start(16);

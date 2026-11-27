@@ -310,8 +310,7 @@ VPage {
             VButton {
                 id: sourceBtn
                 objectName: "pro-source-button"
-                iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
-                        : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
+                iconName: "monitor"
                 text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
                 tip: text
                 maxTextWidth: sourceLoading.visible
@@ -835,7 +834,6 @@ VPage {
                 y: transport.compact ? 34 : 0
                 height: 34
                 spacing: 10
-                PlaybackRateButton { objectName: "pro-playback-rate" }
                 RotateButton { objectName: "pro-rotate" }
                 VTag {
                     objectName: "pro-fg-tag"
@@ -861,14 +859,6 @@ VPage {
                     TapHandler { onTapped: barBtn.tapped() }
                     ToolTip.visible: barHover.hovered
                     ToolTip.text: barBtn.tip
-                }
-                BarButton {
-                    id: proCcButton
-                    objectName: "pro-subtitles"
-                    glyph: "cc"
-                    tip: qsTr("字幕")
-                    visible: veyra.hasSource && !veyra.isCapture
-                    onTapped: proCcMenu.openAt(proCcButton, "up")
                 }
                 BarButton {
                     id: proAudioButton
@@ -995,20 +985,6 @@ VPage {
                         text: veyra.vrrSummary + (veyra.displayRefreshHz > 0 ? " · " + veyra.displayRefreshHz.toFixed(0) + " Hz" : "")
                         color: veyra.vrrState >= 4 ? Theme.ok : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
                         horizontalAlignment: Text.AlignRight
-                        elide: Text.ElideRight
-                    }
-                    // Network / server playback (#48): buffer, download speed, reconnects.
-                    Text { visible: veyra.networkActive; text: qsTr("网络"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 12 }
-                    Text {
-                        objectName: "pro-network-summary"
-                        visible: veyra.networkActive
-                        Layout.fillWidth: true
-                        text: veyra.networkSummary
-                        color: veyra.networkHolding ? Theme.warn : Theme.t1; font.family: Theme.fontMono; font.pixelSize: 12
-                        horizontalAlignment: Text.AlignRight
-                        // The card is narrow: the three figures wrap instead of losing the last one.
-                        wrapMode: Text.WordWrap
-                        maximumLineCount: 3
                         elide: Text.ElideRight
                     }
                 }
@@ -2177,24 +2153,7 @@ VPage {
     }
     readonly property real testMenuScale: sourceMenu.motionScale
 
-    // The pill's 字幕 / 音轨 menus, for the video bar's buttons.
-    VMenu {
-        id: proCcMenu
-        title: qsTr("字幕")
-        items: [{ label: qsTr("关闭", "off"), checked: veyra.subtitlePrimary < 0, track: -1 }]
-            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
-                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
-            .concat([{ label: qsTr("加载外部字幕…"), icon: "import", act: "load" },
-                     { sep: true },
-                     { label: qsTr("字幕设置…"), note: qsTr("字体、字号、描边、位置、延时"), icon: "type", act: "dlg" },
-                     { label: qsTr("实时翻译设置…"), icon: "type", act: "translation" }])
-        onPicked: (i, o) => {
-            if (o.act === "load") veyra.loadSubtitleDialog()
-            else if (o.act === "dlg") root.requestDialog("subtitle")
-            else if (o.act === "translation") root.requestDialog("translation")
-            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
-        }
-    }
+    // The pill's 音轨 menu, for the video bar's button.
     PlayerAudioMenu {
         id: proAudioMenu
         objectName: "pro-audio-menu"
@@ -2206,24 +2165,11 @@ VPage {
         id: sourceMenu
         title: qsTr("片源")
         items: (veyra.sourceName.length > 0
-                ? [{ label: (veyra.isCapture ? qsTr("采集卡 · ") : "") + veyra.sourceName, note: veyra.sourceSummary,
+                ? [{ label: veyra.sourceName, note: veyra.sourceSummary,
                      checked: true, icon: "video", act: "" }] : [])
-            .concat([{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
-                { label: qsTr("播放地址…"), icon: "cast", act: "network" },
-                     { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
-                     { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
-                     { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
-                     { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
-                     { sep: true },
-                     { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }].filter(Theme.plusSource))
+            .concat([{ label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" }])
         onPicked: (i, o) => {
-            if (o.act === "file") veyra.openFileDialog()
-            else if (o.act === "network") veyra.openNetworkDialog()
-            else if (o.act === "ps5") veyra.openPs5Dialog()
-            else if (o.act === "moonlight") veyra.openMoonlightDialog()
-            else if (o.act === "xbox") veyra.openXboxDialog()
-            else if (o.act === "screen") veyra.openScreenCaptureDialog()
-            else if (o.act === "capture") veyra.openCaptureDialog()
+            if (o.act === "screen") veyra.openScreenCaptureDialog()
         }
     }
     // The design puts 另存为 / 管理 in the professional page's preset menu.

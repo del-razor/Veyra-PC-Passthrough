@@ -20,13 +20,12 @@ Rectangle {
     // Windowed 极简: a drag on the pill's empty space moves the window, like a title bar.
     signal requestMove()
     signal requestHide()
-    signal requestPlaylist()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
+    readonly property bool menuOpen: presetMenu.visible || audioMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool compact: width < 820
@@ -61,43 +60,18 @@ Rectangle {
         anchors.rightMargin: 16
         spacing: 12
 
-        // --- left: artwork, title and playlist -----------------------
+        // --- left: source icon and title -----------------------------
         RowLayout {
             Layout.preferredWidth: 230; Layout.minimumWidth: 112; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
-            // The file's own cover art when it carries one (MP4 covr, MKV image
-            // attachment); otherwise the plate stays black - never a stand-in.
             Rectangle {
                 id: coverPlate
                 implicitWidth: 46; implicitHeight: 46; radius: 12
                 color: Theme.videoBlack
                 border.width: 1
                 border.color: Theme.stroke
-                clip: true
-                Image {
-                    id: coverArt
-                    objectName: "cine-cover"
-                    anchors.fill: parent
-                    anchors.margins: 1
-                    // Drawn through the masking effect below, never directly.
-                    visible: false
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    cache: false
-                    source: veyra.hasSource && !veyra.isCapture ? "image://veyra-thumb/cover/" + veyra.thumbnailGeneration : ""
-                }
-                // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
-                // a screen DPI change while it walks the parent's children, and the walk then touched
-                // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
-                MultiEffect {
-                    source: coverArt
-                    anchors.fill: coverArt
-                    visible: coverArt.status === Image.Ready
-                    maskEnabled: true
-                    maskSource: coverMask
-                }
-                Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
+                VIcon { anchors.centerIn: parent; name: "monitor"; color: Theme.t2 }
             }
             ColumnLayout {
                 Layout.fillWidth: true
@@ -120,12 +94,6 @@ Rectangle {
                     font.pixelSize: 11
                     elide: Text.ElideRight
                 }
-            }
-            VButton {
-                objectName: "cine-playlist"
-                icon: true; iconName: "list"; tip: qsTr("播放列表")
-                implicitWidth: 32; implicitHeight: 32
-                onClicked: bar.requestPlaylist()
             }
         }
 
@@ -171,9 +139,8 @@ Rectangle {
                     TapHandler { id: cTap; gesturePolicy: TapHandler.WithinBounds; onTapped: cbtn.tapped() }
                 }
 
-                // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
-                CBtn { objectName: "cine-load"; glyph: "folder"; tip: qsTr("载入片源"); onTapped: loadMenu.openAt(this, "up") }
-                CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
+                // 载入: screen capture without leaving 极简.
+                CBtn { objectName: "cine-load"; glyph: "monitor"; tip: qsTr("屏幕捕获"); onTapped: veyra.openScreenCaptureDialog() }
                 CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                 // .play: 40px white circle with the play/pause glyph.
@@ -205,7 +172,6 @@ Rectangle {
                     highlighted: audioMenu.monitorOff
                     onTapped: audioMenu.openAt(this, "up")
                 }
-                PlaybackRateButton { id: playbackRate; objectName: "cine-playback-rate"; menuBottomLimit: bar.menuBottomLimit }
             }
 
             // .seekrow: mono times either side of the rail.
@@ -265,7 +231,7 @@ Rectangle {
                     Timer {
                         id: thumbnailDelay
                         interval: 120
-                        onTriggered: if (!veyra.liveTimeshift.enabled) seekArea.thumbnailBucket = Math.floor(seekArea.hoverFrac * veyra.duration / 2)
+                        onTriggered: seekArea.thumbnailBucket = -1
                     }
                     Rectangle {
                         id: rail
@@ -328,10 +294,7 @@ Rectangle {
                             asynchronous: true
                             cache: true
                             fillMode: Image.PreserveAspectFit
-                            source: !veyra.liveTimeshift.enabled &&
-                                    (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
-                                    ? "image://veyra-thumb/" + veyra.thumbnailGeneration + "/" + (seekArea.thumbnailBucket * 2000)
-                                    : ""
+                            source: ""
                         }
                         Text {
                             anchors.centerIn: previewFrame
@@ -515,55 +478,6 @@ Rectangle {
         onPicked: (i, o) => {
             if (o.act === "pro") bar.requestPage("pro")
             else veyra.applyPresetIndex(o.preset)
-        }
-    }
-
-    // 字幕 (design: app.menu(anchor, '字幕', [...])): the file's own tracks
-    // (embedded and same-name external) from the subtitle loader, the primary
-    // one checked, then loading a file and the settings dialog.
-    VMenu {
-        id: ccMenu
-        aboveLimit: bar.menuBottomLimit
-        title: qsTr("字幕")
-        items: [{ label: qsTr("关闭", "off"), checked: veyra.subtitlePrimary < 0, track: -1 }]
-            .concat(veyra.subtitleTracks.map(t => ({ label: t.label, note: t.note, track: t.index,
-                                                     disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
-            .concat([{ label: qsTr("加载外部字幕…"), icon: "import", act: "load" },
-                     { sep: true },
-                     { label: qsTr("字幕设置…"), note: qsTr("字体、字号、描边、位置、延时"), icon: "type", act: "dlg" }])
-        onPicked: (i, o) => {
-            if (o.act === "load") veyra.loadSubtitleDialog()
-            else if (o.act === "dlg") bar.requestDialog("subtitle")
-            else if (o.track !== undefined) veyra.subtitlePrimary = o.track
-        }
-    }
-
-    // 载入: the same six sources as the home page's cards, each opening its own dialog
-    // (or the file picker) in the main window; the pill steps aside while one is open.
-    VMenu {
-        id: loadMenu
-        objectName: "cine-load-menu"
-        aboveLimit: bar.menuBottomLimit
-        title: qsTr("载入片源")
-        items: [
-            { label: qsTr("打开视频"), note: qsTr("MP4 · MKV · 图片"), icon: "folder", act: "file" },
-            { label: qsTr("播放地址…"), note: "HTTP · HTTPS · RTSP", icon: "cast", act: "network" },
-            { label: qsTr("采集卡"), note: qsTr("HDMI 采集设备"), icon: "video", act: "capture" },
-            { label: qsTr("PS5 串流"), note: qsTr("局域网串流"), icon: "gamepad", act: "ps5" },
-            { label: qsTr("PC 串流"), note: qsTr("Sunshine 主机"), icon: "cast", act: "moonlight" },
-            { label: qsTr("Xbox 串流"), note: qsTr("账号登录 · 实验"), icon: "gamepad", act: "xbox" },
-            { label: qsTr("屏幕捕获"), note: qsTr("窗口或显示器"), icon: "monitor", act: "screen" }
-        ].filter(Theme.plusSource)
-        onPicked: (i, o) => {
-            switch (o.act) {
-            case "file": veyra.openFileDialog(); break
-            case "network": veyra.openNetworkDialog(); break
-            case "capture": veyra.openCaptureDialog(); break
-            case "ps5": veyra.openPs5Dialog(); break
-            case "moonlight": veyra.openMoonlightDialog(); break
-            case "xbox": veyra.openXboxDialog(); break
-            case "screen": veyra.openScreenCaptureDialog(); break
-            }
         }
     }
 

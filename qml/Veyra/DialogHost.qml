@@ -10,18 +10,9 @@ Item {
     anchors.fill: parent
     z: 100
 
-    // Active dialog: network/capture/ps5/moonlight/xbox/screen/subtitle/audio/save/manage.
+    // Active dialog: screen/translation/audio/save/manage.
     property string dialog: ""
     property bool onboardingActive: false
-    readonly property alias captureSettings: captureDialog
-    readonly property bool captureGuideOpen: captureGuide.visible
-    onDialogChanged: {
-        if (dialog !== "capture") {
-            legacyCapturePicker.close()
-            captureGuide.close()
-        }
-    }
-
     function open(key) {
         if (key === "save") saveDialog.resetForOpen()
         if (key === "manage") {
@@ -33,24 +24,8 @@ Item {
     }
     function close() { host.dialog = "" }
 
-    signal startPs5()
-    signal startMoonlight()
-    signal startXbox()
     signal startScreen()
     signal startScreenCrop()
-
-    CaptureGuideDialog { id: captureGuide }
-
-    CaptureLegacyPicker {
-        id: legacyCapturePicker
-        formats: visible ? veyra.captureFormats : []
-        selectedKey: veyra.captureFormatKey
-        onSelected: key => { if (!veyra.captureQueryBusy) veyra.captureFormatKey = key }
-    }
-    Connections {
-        target: veyra
-        function onCaptureChanged() { if (veyra.captureQueryBusy) legacyCapturePicker.close() }
-    }
 
     // Scrim (M16): the design dims the page behind the dialog, opacity .2s linear.
     // The native video window cannot be dimmed from QML; only the dialog panel is cut
@@ -66,59 +41,12 @@ Item {
     // For the motion probe: the open dialog's scale.
     property real motionScale: 1
 
-    // --- shared chrome ----------------------------------------------------
-
-    NetworkSourceDialog {
-        id: networkDialog
-        dialogHost: host
-    }
-
-    // --- 采集卡 -----------------------------------------------------------
-    // The 1.4.4 capture panel, in the new design: device details and formats are
-    // queried asynchronously, only an explicitly chosen audio input is opened,
-    // and the choice is remembered for "继续上次采集". Resolution, frame rate and
-    // pixel format are three views of that one saved format key.
-    CaptureSourceDialog {
-        id: captureDialog
-        dialogHost: host
-        onboardingActive: host.onboardingActive
-        legacyPicker: legacyCapturePicker
-        onGuideRequested: captureGuide.open()
-    }
-
-    // --- PS5 串流 ---------------------------------------------------------
-    // The 1.4.4 Remote Play panel: saved pairings are encrypted in the user's
-    // %LOCALAPPDATA%\Veyra\remoteplay and shared with 1.4.4.
-    Ps5SourceDialog {
-        id: ps5Dialog
-        dialogHost: host    }
-
-    // --- PC 串流（Sunshine / GameStream） ----------------------------------
-    // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once
-    // connected, the picture goes through the software's own pages like any other source.
-    PcSourceDialog {
-        id: mlDialog
-        dialogHost: host
-    }
-
-    // --- Xbox 串流（非官方） ---------------------------------------------------
-    // Sign in with the Xbox (Microsoft) account on Microsoft's own page via a device code, pick a console,
-    // start. The software never sees the password; only a refresh token is kept, encrypted for this user.
-    XboxSourceDialog {
-        id: xbDialog
-        dialogHost: host    }
-
     // --- 屏幕捕获 ---------------------------------------------------------
     ScreenSourceDialog {
         id: screenDialog
         dialogHost: host
     }
 
-    // --- 字幕设置 ---------------------------------------------------------
-    SubtitleSettingsDialog {
-        id: subtitleDialog
-        dialogHost: host
-    }
     LiveTranslationDialog {
         dialogHost: host
     }
