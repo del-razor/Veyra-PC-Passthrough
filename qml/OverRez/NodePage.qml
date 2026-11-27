@@ -442,10 +442,9 @@ VPage {
                         Layout.fillWidth: statsBar.compact
                         objectName: "node-source-button"
                         iconName: "monitor"
-                        text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
+                        text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "Capture Source"
                         maxTextWidth: 180
-                        trailingIcon: "down"
-                        onClicked: nodeSourceMenu.openAt(this, "down")
+                        onClicked: root.requestPage("home")
                     }
                     VButton {
                         Layout.row: 0; Layout.column: 1

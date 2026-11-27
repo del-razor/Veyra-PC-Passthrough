@@ -41,18 +41,7 @@ Item {
     // For the motion probe: the open dialog's scale.
     property real motionScale: 1
 
-    // --- 屏幕捕获 ---------------------------------------------------------
-    ScreenSourceDialog {
-        id: screenDialog
-        dialogHost: host
-    }
-
     LiveTranslationDialog {
-        dialogHost: host
-    }
-
-    // --- 音频设置 ---------------------------------------------------------
-    AudioSettingsDialog {
         dialogHost: host
     }
 

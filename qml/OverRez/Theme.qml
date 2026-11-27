@@ -16,7 +16,8 @@ import QtQuick
 QtObject {
     // --- palette ------------------------------------------------------------
     property string paletteName: "dusk"
-    readonly property bool dusk: paletteName !== "classic"
+    // OverRez: the classic palette only.
+    readonly property bool dusk: false
 
     // --- surfaces (app.css .vy) -------------------------------------------
     readonly property color card: dusk ? "#161425" : "#131317"

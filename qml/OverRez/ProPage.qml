@@ -87,7 +87,7 @@ VPage {
     }
     onTabChanged: Qt.callLater(() => stagger(tab === "quality" ? qualityCol : tab === "fg" ? fgCol
                                            : tab === "color" ? colourPanel.sectionColumn
-                                           : tab === "audio" ? audioCol : displayCol, 30, 460, 10))
+                                           : displayCol, 30, 460, 10))
 
     // M30: the NR layer card that was just added pops in; the number is reset
     // shortly after so a later rebuild of the list does not pop it again.
@@ -311,15 +311,15 @@ VPage {
                 id: sourceBtn
                 objectName: "pro-source-button"
                 iconName: "monitor"
-                text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
+                text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : "Capture Source"
                 tip: text
                 maxTextWidth: sourceLoading.visible
                     ? Math.max(32, Math.min(260, sourceInfo.titleAndFormatSpace
                         - (formatTag.visible ? Math.min(formatTag.implicitWidth, sourceInfo.formatLimit) : 0)))
                     : Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
                                            - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
-                trailingIcon: "down"
-                onClicked: sourceMenu.openAt(this, "down")
+                // OverRez: the button opens the capture page, where the target is chosen.
+                onClicked: root.requestPage("home")
             }
             // "1080p60 · YUY2 · SDR": reported values only.
             VTag {
@@ -776,15 +776,6 @@ VPage {
                     TapHandler { onTapped: barBtn.tapped() }
                     ToolTip.visible: barHover.hovered
                     ToolTip.text: barBtn.tip
-                }
-                BarButton {
-                    id: proAudioButton
-                    objectName: "pro-audio-tracks"
-                    glyph: proAudioMenu.captureSource ? "vol" : "music"
-                    tip: proAudioMenu.buttonLabel
-                    highlighted: proAudioMenu.monitorOff
-                    visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
-                    onTapped: proAudioMenu.openAt(proAudioButton, "up")
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
                 Item {
@@ -1246,7 +1237,6 @@ VPage {
                         { id: "quality", label: qsTr("画质") },
                         { id: "fg", label: qsTr("补帧") },
                         { id: "color", label: qsTr("色彩") },
-                        { id: "audio", label: qsTr("声音") },
                         { id: "display", label: qsTr("显示") }
                     ]
                     delegate: Rectangle {
@@ -2011,13 +2001,6 @@ VPage {
                         api: veyra
                     }
 
-                    // --- 声音 -------------------------------------------------
-                    ProAudioPanel {
-                        id: audioCol
-                        Layout.fillWidth: true
-                        visible: root.tab === "audio"
-                    }
-
                     // --- 显示 -------------------------------------------------
                     ProDisplayPanel {
                         id: displayCol
@@ -2070,13 +2053,6 @@ VPage {
     }
     readonly property real testMenuScale: sourceMenu.motionScale
 
-    // The pill's 音轨 menu, for the video bar's button.
-    PlayerAudioMenu {
-        id: proAudioMenu
-        objectName: "pro-audio-menu"
-        backend: veyra
-        onSettingsRequested: root.requestDialog("audio")
-    }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
     VMenu {
         id: sourceMenu
@@ -2196,7 +2172,15 @@ VPage {
                 font.family: Theme.fontUi; font.pixelSize: 11
                 wrapMode: Text.WordWrap
             }
-            VTag { text: mc.tag; kind: mc.active ? "acc" : "" }
+            // Wrapped text rather than a tag: the longer notes ran past the card's edge.
+            Text {
+                Layout.fillWidth: true
+                text: mc.tag
+                color: mc.active ? Theme.accent : Theme.t2
+                font.family: Theme.fontUi; font.pixelSize: 11
+                font.weight: Font.Medium
+                wrapMode: Text.WordWrap
+            }
         }
     }
     component Bullet: RowLayout {
@@ -2249,7 +2233,7 @@ VPage {
             spacing: 6
             Bullet { visible: switchDialog.targetMode === 1; text: qsTr("两种模式的设置、预设完全分开保存，切回列表时恢复列表原来的设置。") }
             Bullet { visible: switchDialog.targetMode === 1; text: qsTr("切换会重建处理链，画面可能停顿几百毫秒。") }
-            Bullet { visible: switchDialog.targetMode === 1; text: qsTr("节点模式按连线顺序真实执行；离线导出仅支持列表模式。") }
+            Bullet { visible: switchDialog.targetMode === 1; text: "Node mode runs the effects in the order they are wired." }
             Bullet { visible: switchDialog.targetMode === 0; text: qsTr("回到列表模式，恢复列表之前的设置和预设。") }
             Bullet { visible: switchDialog.targetMode === 0; text: qsTr("节点链会保留，下次切回节点模式时继续使用。") }
             Bullet { visible: switchDialog.targetMode === 0; text: qsTr("切换会重建处理链，画面可能停顿几百毫秒。") }

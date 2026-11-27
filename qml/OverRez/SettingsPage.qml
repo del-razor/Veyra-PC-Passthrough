@@ -14,7 +14,6 @@ import QtQuick.Layouts
 VPage {
     id: root
     signal requestPage(string page)
-    property Item fullscreenBackground
 
     property string section: "look"
     property bool hdrAdvancedExpanded: false
@@ -27,7 +26,7 @@ VPage {
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, perf: secPerf, compat: secCompat, keys: secKeys, comp: secComp, about: secAbout })
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -41,17 +40,14 @@ VPage {
     }
 
     readonly property var sections: [
-        { id: "look",   label: qsTr("外观"), icon: "palette" },
-        { id: "window", label: qsTr("启动与窗口"), icon: "appwin" },
-        { id: "play",   label: qsTr("播放", "section"), icon: "play" },
-        { id: "audio",  label: qsTr("音频"), icon: "vol" },
-        { id: "perf",   label: qsTr("性能"), icon: "gauge" },
-        { id: "compat", label: qsTr("兼容"), icon: "monitor" },
-        { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
-        { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
-        { id: "about", label: qsTr("关于"), icon: "info" },
-        // The one entry with a coloured icon, so it can be found.
-        { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
+        { id: "look",   label: "Appearance", icon: "palette" },
+        { id: "window", label: "Startup & Window", icon: "appwin" },
+        { id: "play",   label: "Video", icon: "play" },
+        { id: "perf",   label: "Performance", icon: "gauge" },
+        { id: "compat", label: "Compatibility", icon: "monitor" },
+        { id: "keys",  label: "Shortcuts", icon: "zap" },
+        { id: "comp",  label: "Components & Licenses", icon: "box" },
+        { id: "about", label: "About", icon: "info" }
     ]
 
     // --- nav ---------------------------------------------------------------
@@ -171,7 +167,7 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "look"
-                    VH1 { text: qsTr("外观") }
+                    VH1 { text: "Appearance" }
                     Text {
                         text: qsTr("界面随时可调，不影响播放和增强设置。")
                         color: Theme.t2
@@ -179,13 +175,6 @@ VPage {
                         font.pixelSize: Theme.fsBody
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                    }
-                    Loader {
-                        Layout.fillWidth: true
-                        active: !!root.fullscreenBackground && root.section === "look"
-                        sourceComponent: Component {
-                            PortraitBackgroundSettings { controller: root.fullscreenBackground }
-                        }
                     }
                     VGroup {
                         // Veyra PLUS: classic palette only, no startup intro or music.
@@ -247,7 +236,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("滑块键盘微调")
-                            hint: qsTr("点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退")
+                            hint: "Click a slider, then use the ← and → keys to adjust it by this step. Esc leaves the slider."
                             VSeg {
                                 objectName: "set-slider-step"
                                 options: [{ id: "1", label: "1" }, { id: "0.1", label: "0.1" }, { id: "0.01", label: "0.01" }]
@@ -275,30 +264,6 @@ VPage {
                                 onPicked: id => veyra.setPreference("uiScale", Number(id))
                             }
                         }
-                        VRow {
-                            label: qsTr("界面语言")
-                            hint: qsTr("立即生效；日志保持中文，方便反馈问题")
-                            VSelect {
-                                objectName: "set-language"
-                                implicitWidth: 170
-                                // Each language is named in itself, so it can be found from any of them.
-                                options: [
-                                    { id: "auto", label: qsTr("跟随系统") },
-                                    { id: "zh-CN", label: qsTr("简体中文") },
-                                    { id: "zh-TW", label: qsTr("繁體中文") },
-                                    { id: "en", label: "English" },
-                                    { id: "ja", label: qsTr("日本語") },
-                                    { id: "ko", label: "한국어" },
-                                    { id: "es", label: "Español" },
-                                    { id: "fr", label: "Français" },
-                                    { id: "de", label: "Deutsch" },
-                                    { id: "pt-BR", label: "Português (Brasil)" },
-                                    { id: "ru", label: "Русский" }
-                                ]
-                                value: (options.find(o => o.id === (veyra.preferences.language || "auto")) || options[0]).label
-                                onPicked: id => veyra.setPreference("language", id)
-                            }
-                        }
                     }
                 }
 
@@ -308,7 +273,7 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "window"
-                    VH1 { text: qsTr("启动与窗口") }
+                    VH1 { text: "Startup & Window" }
                     Text {
                         text: qsTr("程序启动时的页面、窗口和恢复行为。")
                         color: Theme.t2
@@ -320,11 +285,11 @@ VPage {
                     VGroup {
                         VRow {
                             label: qsTr("打开时的默认页面")
-                            hint: qsTr("首页 = 选择片源的页面（点顶部 Logo 也能回到这里）")
+                            hint: "Capture Source is the screen capture page. The logo at the top also returns there."
                             VSeg {
                                 objectName: "set-default-page"
                                 options: [
-                                    { id: "home", label: qsTr("首页") },
+                                    { id: "home", label: "Capture Source" },
                                     { id: "min", label: qsTr("极简模式") },
                                     { id: "pro", label: qsTr("专业模式") },
                                     { id: "last", label: qsTr("上次") }
@@ -351,7 +316,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("启动后自动继续上次内容")
-                            hint: qsTr("视频恢复上次进度；采集卡沿用上次设备与设置")
+                            hint: "Starts the last screen capture again when OverRez opens."
                             VSwitch {
                                 objectName: "set-auto-resume"
                                 checked: !!veyra.preferences.autoResume
@@ -367,9 +332,9 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "play"
-                    VH1 { text: qsTr("播放", "section") }
+                    VH1 { text: "Video" }
                     Text {
-                        text: qsTr("文件播放、字幕与截图的默认行为。")
+                        text: "HDR output, live translation, screenshots, recording, streaming apps and Instant Replay."
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -790,71 +755,13 @@ VPage {
                     }
                 }
 
-                // --- 音频 ---
-                ColumnLayout {
-                    id: secAudio
-                    Layout.fillWidth: true
-                    spacing: 12
-                    visible: root.section === "audio"
-                    VH1 { text: qsTr("音频") }
-                    Text {
-                        text: qsTr("声音同步、音量与输出设备。")
-                        color: Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsBody
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("声音同步")
-                            hint: veyra.audioSyncMode === 0 ? (veyra.audioSyncLive ? qsTr("软件估算补偿 ") + veyra.audioCompensationMs.toFixed(0) + " ms" : qsTr("自动估算 · 采集卡 / PS5 实时输入时生效"))
-                                  : veyra.audioSyncMode === 1 ? qsTr("手动偏移 · 实时输入时生效") : qsTr("关闭补偿")
-                            VSeg {
-                                options: [{ id: "0", label: qsTr("自动估算") }, { id: "1", label: qsTr("手动") }, { id: "2", label: qsTr("关闭", "off") }]
-                                current: String(veyra.audioSyncMode)
-                                onPicked: id => veyra.audioSyncMode = Number(id)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("音频偏移")
-                            hint: qsTr("正值延后音频")
-                            value: veyra.audioOffsetMs + " ms"
-                            VSlider {
-                                implicitWidth: 150
-                                center: true
-                                from: -250; to: 250; value: veyra.audioOffsetMs; enabledControl: veyra.audioSyncMode === 1
-                                onMoved: veyra.audioOffsetMs = Math.round(value)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("音量")
-                            value: Math.round(veyra.volume * 100) + "%"
-                            VSlider {
-                                objectName: "settings-volume"
-                                implicitWidth: 150
-                                from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
-                                valueFromModel: true; defaultValue: 1
-                                onMoved: veyra.volume = value
-                            }
-                        }
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("输出设备与下混")
-                            hint: veyra.audioOutputStatus
-                            VButton { text: qsTr("音频设置…"); onClicked: veyra.openAudioDialog() }
-                        }
-                    }
-                }
-
                 // --- 性能 ---
                 ColumnLayout {
                     id: secPerf
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "perf"
-                    VH1 { text: qsTr("性能") }
+                    VH1 { text: "Performance" }
                     Text {
                         text: qsTr("显卡调度、预热与资源监控。默认设置适合大多数机器。")
                         color: Theme.t2
@@ -944,7 +851,7 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "compat"
-                    VH1 { text: qsTr("兼容") }
+                    VH1 { text: "Compatibility" }
                     Text {
                         text: qsTr("界面绘制、OBS、监控软件兼容需重启；HDR 补帧兼容可在播放中切换。")
                         color: Theme.t2
@@ -1057,9 +964,9 @@ VPage {
                     Layout.fillWidth: true
                     spacing: 12
                     visible: root.section === "keys"
-                    VH1 { text: qsTr("快捷键") }
+                    VH1 { text: "Shortcuts" }
                     Text {
-                        text: qsTr("点击右侧按键，再按下新的组合键即可重新绑定；Esc 取消。")
+                        text: "Click a key on the right, then press the new key combination. Esc cancels."
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -1067,17 +974,15 @@ VPage {
                     VGroup {
                         Repeater {
                             model: [
-                                { id: "playPause", a: qsTr("播放 / 暂停") },
-                                { id: "fullscreen", a: qsTr("全屏"), note: qsTr("F11 / Alt+Enter 也可以") },
-                                { id: "lock", a: qsTr("锁定全屏控制条") },
-                                { id: "hold", a: qsTr("按住查看原画") },
-                                { id: "screenshot", a: qsTr("截图"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "record", a: qsTr("开始 / 停止录制"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用") },
-                                { id: "fullscreenStats", a: qsTr("显示 / 隐藏全屏帧率") },
-                                { id: "toggleMode", a: qsTr("切换极简 / 专业") },
-                                { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
-                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }
+                                { id: "gamePanel", a: "Adjust picture", note: "Opens the adjust panel over the game. Ctrl, Alt and Shift combinations work." },
+                                { id: "gameExit", a: "Stop capture", note: "Emergency exit: leaves full screen and gives the screen back, even if the panel can't open." },
+                                { id: "fullscreen", a: "Full screen", note: "F11 or Alt+Enter also work." },
+                                { id: "hold", a: "Hold to see the original picture" },
+                                { id: "screenshot", a: "Screenshot", note: "Works while you play." },
+                                { id: "record", a: "Start / stop recording", note: "Works while you play." },
+                                { id: "replay", a: "Save Instant Replay", note: "Turn on Instant Replay in Settings > Video first. Works while you play." },
+                                { id: "fullscreenStats", a: "Show / hide the frame rate in full screen" },
+                                { id: "toggleMode", a: "Switch Minimal / Pro" }
                             ]
                             delegate: VRow {
                                 id: keyRow
@@ -1096,7 +1001,7 @@ VPage {
                                     Text {
                                         id: keyText
                                         anchors.centerIn: parent
-                                        text: parent.capturing ? qsTr("按下新按键…") : (veyra.shortcuts[keyRow.modelData.id] || qsTr("未设置"))
+                                        text: parent.capturing ? "Press the new key…" : (veyra.shortcuts[keyRow.modelData.id] || "Not set")
                                         color: Theme.t1
                                         font.family: Theme.fontMono
                                         font.pixelSize: Theme.fsSmall
@@ -1109,20 +1014,6 @@ VPage {
                         VRow {
                             label: qsTr("恢复默认")
                             VButton { text: qsTr("全部还原"); ghost: true; onClicked: veyra.resetShortcuts() }
-                        }
-                    }
-                    VGroup {
-                        Repeater {
-                            model: [
-                                { a: qsTr("后退 / 前进 5 秒"), k: "← / →" },
-                                { a: qsTr("音量"), k: "↑ / ↓" },
-                            ]
-                            delegate: VRow {
-                                required property var modelData
-                                label: modelData.a
-                                hint: qsTr("固定")
-                                VTag { text: modelData.k }
-                            }
                         }
                     }
                     // Captures the next key combination for the row being rebound.
@@ -1161,10 +1052,10 @@ VPage {
                     spacing: 12
                     visible: root.section === "comp"
                     onVisibleChanged: if (visible) veyra.refreshComponentList()
-                    VH1 { text: qsTr("组件与许可") }
+                    VH1 { text: "Components & Licenses" }
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("运行组件均为实验运行时，非 NVIDIA 官方合作或认证。详细哈希见 release-runtime-manifest.json。")
+                        text: "The GPU runtimes OverRez uses for frame generation, super resolution and neural rendering. They are not an official NVIDIA, AMD or Intel partnership or certification. File hashes are in release-runtime-manifest.json, and the licenses are in the licenses folder."
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -1221,13 +1112,14 @@ VPage {
                             spacing: 4
                             VH1 { text: "OverRez" }
                             Text {
-                                text: qsTr("版本 ") + veyra.version
+                                objectName: "about-version"
+                                text: "Version " + veyra.version
                                 color: Theme.t2
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsBody
                             }
                             Text {
-                                text: "Beyond Ultra. Based on Veyra by Likely7."
+                                text: "Beyond Ultra."
                                 color: Theme.t3
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsSmall
@@ -1236,29 +1128,14 @@ VPage {
                     }
                     VGroup {
                         VRow {
-                            label: qsTr("反馈问题")
-                            hint: qsTr("打开 GitHub Issues，诊断信息已自动复制")
-                            VButton { text: qsTr("打开"); onClicked: veyra.openFeedbackPage() }
-                        }
-                        VRow {
-                            label: qsTr("赞助作者")
-                            hint: qsTr("Patreon、微信与支付宝")
-                            VButton { objectName: "about-sponsor"; text: qsTr("前往"); onClicked: root.section = "sponsor" }
-                        }
-                        VRow {
-                            label: qsTr("诊断信息")
-                            hint: qsTr("复制后附在反馈里")
-                            VButton { text: qsTr("复制"); onClicked: veyra.copyDiagnostics() }
-                        }
-                        VRow {
-                            label: qsTr("日志")
+                            label: "Log"
                             hint: veyra.logFile
-                            VButton { text: qsTr("打开目录"); ghost: true; onClicked: veyra.openLogFolder() }
+                            VButton { text: "Open folder"; ghost: true; onClicked: veyra.openLogFolder() }
                         }
                         VRow {
-                            label: qsTr("用户数据")
+                            label: "User data"
                             hint: veyra.dataDirectory
-                            VButton { text: qsTr("打开目录"); ghost: true; onClicked: veyra.openDataFolder() }
+                            VButton { text: "Open folder"; ghost: true; onClicked: veyra.openDataFolder() }
                         }
                     }
                     // The diagnostics the engine actually reports, shown verbatim.
@@ -1285,15 +1162,15 @@ VPage {
                             }
                         }
                     }
-                }
-
-                // --- 赞助作者 ------------------------------------------------
-                SponsorPanel {
-                    id: secSponsor
-                    objectName: "set-sponsor"
-                    Layout.fillWidth: true
-                    visible: root.section === "sponsor"
-                    onOpenLink: id => veyra.openSponsorLink(id)
+                    Text {
+                        objectName: "about-credit"
+                        Layout.fillWidth: true
+                        text: "Based on Veyra by Likely7. Licensed under GPL-3.0."
+                        color: Theme.t3
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSmall
+                        wrapMode: Text.WordWrap
+                    }
                 }
 
                 Item { Layout.preferredHeight: 12 }
@@ -1305,7 +1182,7 @@ VPage {
         id: obsRestart
         objectName: "obs-restart-confirm"
         title: qsTr("需要重启软件")
-        text: qsTr("设置已保存，重启后生效。现在重启吗？当前播放或串流将停止。")
+        text: "Settings saved. They take effect after a restart. Restart now? The current capture will stop."
         acceptText: qsTr("是")
         rejectText: qsTr("否")
         onAccepted: veyra.restartApplication()

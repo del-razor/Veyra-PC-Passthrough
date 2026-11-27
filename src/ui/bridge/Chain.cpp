@@ -992,9 +992,7 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
     add("fg", tr("补帧"),
         s.multiplier > 1 ? QStringLiteral("%1X").arg(s.multiplier) : tr("关闭", "off"),
         s.multiplier > 1);
-    add("audio", tr("声音"),
-        s.audioOffsetMs != 0 ? tr("偏移 %1 ms").arg(s.audioOffsetMs) : tr("默认"),
-        s.audioOffsetMs != 0);
+    // OverRez: no audio part; screen capture has no sound of its own to offset.
     const QStringList flowNames{QStringLiteral("NVIDIA NVOF"), tr("AMD 光流"), QStringLiteral("GPU DIS")};
     const QStringList qualityNames{tr("性能"), tr("平衡"), tr("质量")};
     const auto content=engine::currentContentRate(s.content);

@@ -204,28 +204,7 @@ Window {
         strokeColor: root.cinema ? "transparent" : Theme.stroke
     }
 
-    // Below the fullscreen quick-adjust panels. In normal windows the same
-    // backdrop belongs to the page's video area, above the opaque card itself.
-    Item {
-        id: fullscreenBackgroundHost
-        anchors.fill: parent
-    }
-    FullscreenBackground {
-        id: ultrawideBackground
-        readonly property Item previewHost: root.fullscreen ? null
-            : root.shownPage === "pro" ? proPage.videoBackgroundHost
-            : root.shownPage === "node" ? nodePage.videoBackgroundHost
-            : root.shownPage === "min" ? minPage.videoBackgroundHost : null
-        parent: previewHost || fullscreenBackgroundHost
-        width: videoHost.width
-        height: videoHost.height
-        active: root.shownPage === root.page && veyra.hasSource && !veyra.gameMode
-            && (previewHost !== null || (root.fullscreen && root.page !== "home" && root.page !== "set"))
-            && (veyra.aspectMode === 0 || veyra.aspectMode >= 4)
-        pictureAspect: root.reportedAspect
-        pixelRatio: root.Screen.devicePixelRatio
-        settingsOpen: root.page === "set" && settingsPage.section === "look"
-    }
+    // OverRez: the sides of a narrower picture stay black (no side backgrounds).
 
     // The one host item for the native video window; main.cpp finds it by name.
     // Exactly one must exist in the tree: an earlier version had a copy in each
@@ -282,6 +261,7 @@ Window {
             pageId: "home"
             home: pages
             onRequestPage: p => root.goPage(p)
+            onStartCapture: root.startCaptureView()
         }
         MinimalPage {
             id: minPage
@@ -328,7 +308,6 @@ Window {
             id: settingsPage
             pageId: "set"
             home: pages
-            fullscreenBackground: ultrawideBackground
             onRequestPage: p => {
                 if (p === "translation") dialogs.open(p)
                 else root.goPage(p)
@@ -342,10 +321,7 @@ Window {
         anchors.fill: parent
         onboardingActive: root.onboardingActive
         // The dialogs open the source through the bridge; show the picture.
-        onStartScreen: {
-            if (root.page === "home") root.goPage("min")
-            if (veyra.screenOptions.passthrough === true) root.enterGameFullscreen()
-        }
+        onStartScreen: root.startCaptureView()
         onStartScreenCrop: {
             root.goPage("min")
             screenCrop.begin(veyra.screenOptions)
@@ -590,7 +566,7 @@ Window {
         hostRect: Qt.rect(videoHost.x, videoHost.y, videoHost.width, videoHost.height)
         onCancelled: {
             veyra.stopPlayback()
-            dialogs.open("screen")
+            root.goPage("home")
         }
     }
     Connections {
@@ -753,7 +729,6 @@ Window {
     }
     // Rebindable (设置 → 快捷键); the hold-to-compare key is handled by the bridge's
     // application event filter because it needs the key release too.
-    Shortcut { sequence: veyra.shortcuts.playPause; enabled: !screenCrop.editing; onActivated: veyra.togglePlayPause() }
     Shortcut { sequence: veyra.shortcuts.fullscreen; onActivated: root.toggleFullscreen() }
     Shortcut {
         sequence: veyra.shortcuts.fullscreenStats
@@ -791,14 +766,6 @@ Window {
         enabled: root.fullscreen && !root.fullLocked && dialogs.dialog === "" &&
                  !veyra.gameMode && (root.page === "min" || root.page === "pro" || root.page === "node")
         onActivated: root.toggleQuickPanel()
-    }
-    // 5 s steps (field request 2026-10-02).
-    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
-    Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
-    Shortcut {
-        sequence: veyra.shortcuts.lock
-        enabled: root.fullscreen
-        onActivated: root.toggleLock()
     }
 
     // Toasts: a refused edit, a finished export, a failed open.
@@ -890,12 +857,20 @@ Window {
         function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
             // A dialog key opens the dialog; anything else is a page.
-            if (p === "screen" || p === "translation" || p === "audio" || p === "save" || p === "manage") {
+            // The capture settings are the capture page, not a dialog.
+            if (p === "screen") { root.goPage("home"); return }
+            if (p === "translation" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
             }
             if (p === "home" || p === "min" || p === "pro" || p === "node" || p === "set") root.goPage(p)
         }
+    }
+
+    // A capture just started: show the picture full screen, which is where game mode works.
+    function startCaptureView() {
+        if (root.page === "home") root.goPage("min")
+        root.enterGameFullscreen()
     }
 
     // The film's aspect drives the window in cinema mode. Reported only: the
@@ -983,49 +958,6 @@ Window {
         root.y = a.y + Math.round((a.height - root.height) / 2)
     }
     onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
-    // 日落 startup intro (DuskIntro.qml, 2026-11-15): on a plain start to the home page in the
-    // dusk palette, unless 设置 → 外观 → 启动动画 is off, animations are reduced or a test
-    // switch is set. Its clock starts with the first frame on screen; a page change (a file
-    // from the command line, a resumed source) fades it out at once.
-    Loader {
-        id: introLoader
-        anchors.fill: parent
-        z: 1000
-        active: false
-        sourceComponent: DuskIntro {
-            skipText: qsTr("单击或按任意键跳过")
-            musicClock: () => { const s = vyMusic.position(); return s >= 0 ? s * 1000 : -1 }
-            onFrame: target = root.introTarget()
-            onRevealHome: homePage.introHold = false
-            onFinished: root.endIntro()
-        }
-        onLoaded: item.target = root.introTarget()
-    }
-    function introTarget() {
-        const w = homePage.wordmarkItem
-        return w ? w.mapToItem(introLoader, 0, 0, w.width, w.height) : Qt.rect(0, 0, 0, 0)
-    }
-    function endIntro() {
-        const i = introLoader.item
-        if (i) veyra.logUi("ui-intro", (i.dismissing ? "dismissed" : "finished") + " ms=" + Math.round(i.ms) + " frames=" + i.frames
-                           + " worstFrameMs=" + Math.round(i.worstFrameMs) + " size=" + root.width + "x" + root.height)
-        homePage.introHold = false
-        introLoader.active = false
-        root.contentItem.forceActiveFocus()
-    }
-    Connections {
-        target: root
-        enabled: introLoader.item !== null
-        function onFrameSwapped() {
-            const i = introLoader.item
-            if (!i || i.running || i.dismissing || i.ms !== 0) return
-            // The music and the intro start together; the intro then follows the music's clock.
-            i.followMusic = root.musicOn && root.musicSounding
-            i.start()
-            veyra.logUi("ui-intro", "started music=" + i.followMusic)
-        }
-        function onPageChanged() { if (introLoader.item && root.page !== "home") introLoader.item.dismiss() }
-    }
     Component.onCompleted: {
         applyStartupSize()
         // Open on the configured page: the user's saved preference, or the
@@ -1036,70 +968,10 @@ Window {
         if (root.testAspect > 0) root.fitToFilm(root.testAspect)
         if (root.test.dialog !== undefined) dialogs.open(root.test.dialog)
         videoHost.syncRect()
-        // Independent of animation, palette, reduced motion and initial page. Never restart.
-        if (root.musicOn && vyMusic.available && !veyra.hasSource && !veyra.openingSource) {
-            vyMusic.prepare(veyra.volume)
-            vyMusic.play()
-        }
         if (root.test.menu !== undefined) testMenuTimer.start()
         if (root.test.fullBar !== undefined) testFullTimer.start()
-        if (Theme.dusk && veyra.preferences.introAnimation !== false
-                && !veyra.reducedMotion && root.page === "home" && Object.keys(root.test).length === 0) {
-            homePage.introHold = true
-            introLoader.active = true
-        }
     }
 
-    // Startup music plays once, continuing after the intro or without it. Media-open
-    // intent or the shared setting/button permanently stops it for this launch.
-    // OverRez: no startup music.
-    readonly property bool musicOn: false
-    readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
-    function stopStartupMusicForSession() {
-        if (typeof vyMusic === "undefined") return
-        vyMusic.pause()
-        veyra.logUi("ui-music", "stopped for this launch (button)")
-    }
-    readonly property bool sourceOpen: veyra.hasSource
-    onSourceOpenChanged: if (sourceOpen && typeof vyMusic !== "undefined") vyMusic.pause()
-    // Bottom right of the home page, above the intro too, while the music plays.
-    Rectangle {
-        id: musicButton
-        objectName: "music-toggle"
-        z: 1001
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: 16
-        width: 34
-        height: 34
-        radius: 17
-        visible: root.musicSounding && !veyra.hasSource
-        color: musicHover.hovered ? Theme.card3 : Qt.rgba(0, 0, 0, 0.28)
-        border.width: 1
-        border.color: Theme.stroke2
-        VIcon {
-            anchors.centerIn: parent
-            name: "music"
-            size: 16
-            color: vyMusic.muted ? Theme.t3 : Theme.t1
-        }
-        // Muted: the note crossed out.
-        Rectangle {
-            visible: vyMusic.muted
-            anchors.centerIn: parent
-            width: 22
-            height: 2
-            radius: 1
-            rotation: -45
-            color: Theme.t2
-        }
-        HoverHandler { id: musicHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler {
-            onTapped: root.stopStartupMusicForSession()
-        }
-        ToolTip.visible: musicHover.hovered
-        ToolTip.text: qsTr("停止本次启动音乐")
-    }
     // The menu anchors on laid-out buttons, so it opens once the page has settled.
     // --full-bar shown|hidden: enter fullscreen with the control window held shown
     // or held hidden, for the present-timing comparison (G2.5).

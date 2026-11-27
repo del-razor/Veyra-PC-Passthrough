@@ -129,7 +129,11 @@ QVariantMap QmlPlayerBridge::screenOptions() const {
     const auto saved = impl_->prefs.value("screen").toMap();
     for (auto it = saved.begin(); it != saved.end(); ++it) if (d.contains(it.key())) d[it.key()] = it.value();
     if (d.value("kind").toInt() == 0) d["method"] = 0;           // DXGI is monitors only
-    if (d.value("method").toInt() == 1) d["cursor"] = false;     // and has no pointer
+    // OverRez: game mode is always on. The real pointer stays on top of the picture,
+    // so the picture carries none, and it maps 1:1 to the screen, so it is never cropped.
+    d["passthrough"] = true;
+    d["cursor"] = false;
+    d["left"] = d["top"] = d["right"] = d["bottom"] = 0;
     return d;
 }
 bool QmlPlayerBridge::setScreenOption(const QString& key, const QVariant& value) {
@@ -141,7 +145,9 @@ bool QmlPlayerBridge::setScreenOption(const QString& key, const QVariant& value)
         const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) { emit notice(tr("数值超出范围"), true); return false; }
         saved[key] = n;
-    } else if (key == QLatin1String("cursor") || key == QLatin1String("fill") || key == QLatin1String("passthrough")) {
+    } else if (key == QLatin1String("cursor") || key == QLatin1String("passthrough")) {
+        return true;                                             // fixed by game mode, see screenOptions()
+    } else if (key == QLatin1String("fill")) {
         saved[key] = value.toBool();
     } else return false;
     impl_->prefs["screen"] = saved;
@@ -174,7 +180,7 @@ bool QmlPlayerBridge::startScreenCapture(bool cropPreview) {
     if (game && value.kind == source::ScreenTargetKind::Window) {
         source::vdesk::Placement desktop;
         if (source::vdesk::Lookup{}.otherDesktop(reinterpret_cast<void*>(value.target), desktop)) {
-            emit notice(tr("游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获"), true);
+            emit notice(QStringLiteral("This window is on another Windows virtual desktop. Move it to this desktop, then start the capture."), true);
             return false;
         }
     }
@@ -188,7 +194,7 @@ bool QmlPlayerBridge::startScreenCapture(bool cropPreview) {
         // Exclusive fullscreen still cannot be covered by another process.
         QUERY_USER_NOTIFICATION_STATE state{};
         if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
-            emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
+            emit notice(QStringLiteral("The game is in exclusive fullscreen, which Windows lets nothing cover. Switch the game to borderless windowed or windowed mode."), true);
     } else impl_->gameModeUri.clear();
     if (cropPreview) value.left = value.top = value.right = value.bottom = 0;
     bool otherDesktop = false;

@@ -1,6 +1,4 @@
 module OverRez
-FullscreenBackground 1.0 FullscreenBackground.qml
-PortraitBackgroundSettings 1.0 PortraitBackgroundSettings.qml
 ScreenCropEditor 1.0 ScreenCropEditor.qml
 FullscreenTimingPanel 1.0 FullscreenTimingPanel.qml
 UpdateBanner 1.0 UpdateBanner.qml
@@ -10,7 +8,6 @@ VSubGroup 1.0 VSubGroup.qml
 DialogHost 1.0 DialogHost.qml
 VBackdrop 1.0 VBackdrop.qml
 VAccentFill 1.0 VAccentFill.qml
-DuskIntro 1.0 DuskIntro.qml
 VButton 1.0 VButton.qml
 VCard 1.0 VCard.qml
 VDot 1.0 VDot.qml
@@ -31,7 +28,6 @@ VSwitch 1.0 VSwitch.qml
 VTag 1.0 VTag.qml
 Main 1.0 Main.qml
 VMenu 1.0 VMenu.qml
-PlayerAudioMenu 1.0 PlayerAudioMenu.qml
 VPage 1.0 VPage.qml
 VRise 1.0 VRise.qml
 CineBar 1.0 CineBar.qml
@@ -55,7 +51,6 @@ VSpinner 1.0 VSpinner.qml
 VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml
 AnrDownloadRow 1.0 AnrDownloadRow.qml
-SponsorPanel 1.0 SponsorPanel.qml
 RotateButton 1.0 RotateButton.qml
 
 
@@ -66,7 +61,6 @@ ProPerfOrbs 1.0 ProPerfOrbs.qml
 ProStatusLight 1.0 ProStatusLight.qml
 ProStatusSummary 1.0 ProStatusSummary.qml
 ProAddLayerButton 1.0 ProAddLayerButton.qml
-ProAudioPanel 1.0 ProAudioPanel.qml
 ProDisplayPanel 1.0 ProDisplayPanel.qml
 
 # Dialog components
@@ -76,8 +70,6 @@ DialogGroup 1.0 DialogGroup.qml
 DialogNote 1.0 DialogNote.qml
 DialogTextField 1.0 DialogTextField.qml
 DynamicHudRow 1.0 DynamicHudRow.qml
-ScreenSourceDialog 1.0 ScreenSourceDialog.qml
 LiveTranslationDialog 1.0 LiveTranslationDialog.qml
-AudioSettingsDialog 1.0 AudioSettingsDialog.qml
 SavePresetDialog 1.0 SavePresetDialog.qml
 ManagePresetsDialog 1.0 ManagePresetsDialog.qml

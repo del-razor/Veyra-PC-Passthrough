@@ -25,13 +25,14 @@ Rectangle {
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
-    readonly property bool menuOpen: presetMenu.visible || audioMenu.visible
+    readonly property bool menuOpen: presetMenu.visible
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool compact: width < 820
-    readonly property bool editing: volumeSlider.editing
-    readonly property bool interacting: volumeSlider.pressed || editing
-    function finishEditing() { volumeSlider.closeEditor(true) }
+    // OverRez: no volume slider (screen capture has no sound of its own), so nothing edits.
+    readonly property bool editing: false
+    readonly property bool interacting: false
+    function finishEditing() { }
     HoverHandler { id: barHover }
     // Buttons, the seek rail and the volume slider take their own presses first; only
     // a drag that starts on empty pill reaches this one.
@@ -159,14 +160,6 @@ Rectangle {
                     HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
                 }
-
-                CBtn {
-                    objectName: "cine-audio-tracks"
-                    glyph: audioMenu.captureSource ? "vol" : "music"
-                    tip: audioMenu.buttonLabel
-                    highlighted: audioMenu.monitorOff
-                    onTapped: audioMenu.openAt(this, "up")
-                }
             }
 
         }
@@ -188,29 +181,6 @@ Rectangle {
                 Rectangle {
                     width: 7; height: 7; radius: 3.5
                     color: veyra.failed ? Theme.err : veyra.captureRecovering ? Theme.warn : Theme.ok
-                }
-            }
-
-            RowLayout {
-                Layout.preferredHeight: 32
-                spacing: 6
-                VIcon { name: "vol"; color: Theme.t2 }
-                VSlider {
-                    id: volumeSlider
-                    objectName: "cine-volume"
-                    Layout.preferredWidth: bar.compact ? 48 : 68
-                    Layout.fillHeight: true
-                    from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
-                    defaultValue: 1
-                    valueFromModel: true
-                    fullKnobHitArea: true
-                    onMoved: moved => veyra.volume = moved
-                }
-                VSliderValue {
-                    Layout.preferredWidth: 30
-                    slider: volumeSlider
-                    text: Math.round(veyra.volume * 100) + "%"
-                    color: Theme.t2; pixelSize: 10
                 }
             }
 
@@ -257,13 +227,5 @@ Rectangle {
             if (o.act === "pro") bar.requestPage("pro")
             else veyra.applyPresetIndex(o.preset)
         }
-    }
-
-    PlayerAudioMenu {
-        id: audioMenu
-        objectName: "cine-audio-menu"
-        backend: veyra
-        aboveLimit: bar.menuBottomLimit
-        onSettingsRequested: bar.requestDialog("audio")
     }
 }
