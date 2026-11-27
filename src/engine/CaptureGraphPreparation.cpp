@@ -24,7 +24,7 @@ HWND CapturePreviewWindow::open(HWND parent){
     RECT rect{};
     if(!GetClientRect(parent,&rect))return nullptr;
     const auto instance=GetModuleHandleW(nullptr);
-    constexpr auto name=L"VeyraCapturePreviewWindow";
+    constexpr auto name=L"OverRezCapturePreviewWindow";
     WNDCLASSW cls{};cls.hInstance=instance;cls.lpszClassName=name;cls.lpfnWndProc=previewWndProc;
     if(!RegisterClassW(&cls)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return nullptr;
     window_=CreateWindowExW(WS_EX_NOACTIVATE|WS_EX_NOPARENTNOTIFY,name,L"",WS_VISIBLE|WS_CHILD|WS_DISABLED,

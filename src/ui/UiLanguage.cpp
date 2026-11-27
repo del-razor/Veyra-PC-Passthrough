@@ -79,14 +79,12 @@ QStringList piecesOf(const QString& translation) {
     return translation.split(slot);
 }
 
-// OverRez: translated interface text names the product OverRez. The virtual camera
-// keeps its registered device name, so text that tells people to pick it stays exact.
+// OverRez: translated interface text names the product and its files as OverRez.
 QString rebranded(QString text) {
-    static const QString camera = QStringLiteral("Veyra Virtual Camera");
-    static const QString hold = QString(QChar(0xE000));
-    text.replace(camera, hold);
+    text.replace(QStringLiteral("veyra_qml_ui.exe"), QStringLiteral("OverRezApp.exe"));
+    text.replace(QStringLiteral("Veyra.exe"), QStringLiteral("OverRez.exe"));
     text.replace(QStringLiteral("Veyra"), QStringLiteral("OverRez"));
-    text.replace(hold, camera);
+    text.replace(QStringLiteral("veyra"), QStringLiteral("overrez"));
     return text;
 }
 
@@ -169,23 +167,10 @@ QString translatePieces(const CatalogTranslator& t, const QString& s, int depth)
 
 } // namespace
 
-QString resolve(const QString& preference) {
-    static const QStringList known{QStringLiteral("zh-CN"), QStringLiteral("zh-TW"), QStringLiteral("en"), QStringLiteral("ja"), QStringLiteral("ko"),
-                                   QStringLiteral("es"), QStringLiteral("fr"), QStringLiteral("de"), QStringLiteral("pt-BR"), QStringLiteral("ru")};
-    if (known.contains(preference)) return preference;
-    const QLocale system = QLocale::system();
-    if (system.language() == QLocale::Chinese) {
-        const auto territory = system.territory();
-        const bool traditional = system.script() == QLocale::TraditionalChineseScript || territory == QLocale::Taiwan ||
-                                 territory == QLocale::HongKong || territory == QLocale::Macao;
-        return traditional ? QStringLiteral("zh-TW") : QStringLiteral("zh-CN");
-    }
-    if (system.language() == QLocale::Japanese) return QStringLiteral("ja");
-    if (system.language() == QLocale::Korean) return QStringLiteral("ko");
-    if (system.language() == QLocale::Portuguese) return QStringLiteral("pt-BR");
-    const QString code = system.name().section(QLatin1Char('_'), 0, 0);
-    return known.contains(code) ? code : QStringLiteral("en");
-}
+// OverRez is English only for now: every preference and system locale resolves to
+// the English catalog. The other catalogs stay in the resource so the choice can
+// come back later without a new translation pass.
+QString resolve(const QString&) { return QStringLiteral("en"); }
 
 bool apply(const QString& code) {
     std::lock_guard guard(lock);

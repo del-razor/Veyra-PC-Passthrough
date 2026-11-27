@@ -1,4 +1,4 @@
-module Veyra
+module OverRez
 FullscreenBackground 1.0 FullscreenBackground.qml
 PortraitBackgroundSettings 1.0 PortraitBackgroundSettings.qml
 ScreenCropEditor 1.0 ScreenCropEditor.qml

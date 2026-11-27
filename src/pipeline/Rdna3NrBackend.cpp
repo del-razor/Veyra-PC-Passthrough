@@ -85,7 +85,7 @@ Rdna3NrBackend::Rdna3NrBackend():impl_(std::make_unique<Impl>()){}
 Rdna3NrBackend::~Rdna3NrBackend(){close();}
 bool Rdna3NrBackend::runtimeAvailable(const std::filesystem::path& p){
     std::error_code ec;
-    for(const auto* n:{L"veyra_amd_nr_worker.exe",L"nvngx_dlssnr.dll",L"zluda/nvcuda.dll",L"zluda/nvngx.dll",L"zluda/nvapi64.dll",L"zluda/zluda_real.dll",L"kernels/kernels.txt",L"cache/ComputeCache/coverage.txt",L"cache/ComputeCache/zluda2.db"})
+    for(const auto* n:{L"overrez_amd_nr_worker.exe",L"nvngx_dlssnr.dll",L"zluda/nvcuda.dll",L"zluda/nvngx.dll",L"zluda/nvapi64.dll",L"zluda/zluda_real.dll",L"kernels/kernels.txt",L"cache/ComputeCache/coverage.txt",L"cache/ComputeCache/zluda2.db"})
         if(!std::filesystem::is_regular_file(p/n,ec))return false;
     return true;
 }
@@ -138,7 +138,7 @@ bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* 
     if(!InitializeProcThreadAttributeList(startup.lpAttributeList,1,0,&bytes)||!UpdateProcThreadAttribute(startup.lpAttributeList,0,PROC_THREAD_ATTRIBUTE_HANDLE_LIST,inherited,sizeof(inherited),nullptr,nullptr)){
         drop(readChild);drop(writeChild);return s.fail("RDNA3 inherited-handle allowlist failed");
     }
-    const auto executable=directory/(test?L"veyra_amd_nr_test_worker.exe":L"veyra_amd_nr_worker.exe");
+    const auto executable=directory/(test?L"overrez_amd_nr_test_worker.exe":L"overrez_amd_nr_worker.exe");
     auto command=std::format(L"\"{}\" {} {}",executable.wstring(),uintptr_t(readChild),uintptr_t(writeChild));
     PROCESS_INFORMATION process{};
     const bool created=CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,TRUE,CREATE_NO_WINDOW|CREATE_SUSPENDED|EXTENDED_STARTUPINFO_PRESENT,nullptr,directory.c_str(),&startup.StartupInfo,&process)!=FALSE;

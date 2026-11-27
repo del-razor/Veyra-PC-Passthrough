@@ -824,9 +824,9 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             if(!track.open())return false;
             ++trackCount;return true;
         };
-        if(sound&&microphone&&!microphoneTrack)return add(&soundLane,&micLane,"Veyra sound + microphone");
-        if(sound&&!add(&soundLane,nullptr,"Veyra sound"))return false;
-        if(microphone&&!add(&micLane,nullptr,"Veyra microphone"))return false;
+        if(sound&&microphone&&!microphoneTrack)return add(&soundLane,&micLane,"OverRez sound + microphone");
+        if(sound&&!add(&soundLane,nullptr,"OverRez sound"))return false;
+        if(microphone&&!add(&micLane,nullptr,"OverRez microphone"))return false;
         return true;
     }
     void openSound(){
@@ -1168,7 +1168,7 @@ bool LiveRecorder::start(const RecordingSettings& settings,std::wstring& error){
     }
     s.settings=settings;s.armed=true;s.failed=false;s.error.clear();s.note.clear();s.encoder.clear();
     s.framesBase=s.droppedBase=0;s.files=0;s.firstFrameUs=0;s.nextDueUs=0;s.lastSeconds=0;s.audioTrack=false;
-    s.baseName=L"Veyra-"+fileStamp();s.nextNumber=1;++s.started;
+    s.baseName=L"OverRez-"+fileStamp();s.nextNumber=1;++s.started;
     veyra::log::info("live-recorder",std::format("armed directory={} bitrateMbps={} hevc={} fpsLimit={} audio={} microphone={}",
         utf8(settings.directory),settings.bitrateMbps,settings.hevc,settings.fpsLimit,settings.audio,
         settings.microphone?(settings.microphoneTrack?"track":"mixed"):"off"));
@@ -1246,7 +1246,7 @@ bool LiveRecorder::saveReplay(const std::wstring& directory,std::wstring& error)
         error=L"录制目录所在磁盘剩余空间不足，无法保存回放";return false;
     }
     auto job=std::make_shared<ReplaySave>();
-    job->path=uniqueFile(directory,L"Veyra-Replay-"+fileStamp());
+    job->path=uniqueFile(directory,L"OverRez-Replay-"+fileStamp());
     const int64_t request=sink::recordingClockUs();
     veyra::log::info("live-recorder",std::format("replay save requested path={} buffered={:.2f}s bytes={}",utf8(job->path),buffer->coverage().seconds,buffer->coverage().bytes));
     try{

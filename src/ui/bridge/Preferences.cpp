@@ -728,7 +728,7 @@ QString QmlPlayerBridge::screenshotDirectory() const {
     const QString chosen = impl_->prefString("screenshotDir");
     if (!chosen.isEmpty()) return chosen;
     const QString pictures = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
-    return QDir(pictures.isEmpty() ? QDir::homePath() : pictures).filePath(QStringLiteral("Veyra"));
+    return QDir(pictures.isEmpty() ? QDir::homePath() : pictures).filePath(QStringLiteral("OverRez"));
 }
 QString QmlPlayerBridge::lastScreenshot() const { return impl_->lastScreenshot; }
 QString QmlPlayerBridge::dataDirectory() const { return QString::fromStdWString(impl_->dataDir.wstring()); }

@@ -1,6 +1,6 @@
 name: OverRez release
 
-# Builds this fork's player (veyra_qml_ui.exe + qml/Veyra) and drops it into
+# Builds OverRez (OverRez.exe, OverRezApp.exe, qml/OverRez, virtual camera) and lays it over
 # the official NVIDIA and AMD portable packages of the same upstream version
 # (Likely7/Veyra-NRVideo releases), then builds a Setup EXE for each.
 # Each push to the passthrough branch replaces the draft release vX.Y.Z;
@@ -176,7 +176,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Veyra.iss uses directives from the current Inno Setup release (SetupArchitecture,
+          # OverRez.iss uses directives from the current Inno Setup release (SetupArchitecture,
           # dark wizard styles), newer than the runner image's copy.
           $PSNativeCommandUseErrorActionPreference = $false
           gh release download -R jrsoftware/issrc -p 'innosetup-*.exe' -D C:\is-dl --clobber
@@ -193,7 +193,7 @@ jobs:
           if (-not $iscc -or -not (Test-Path $iscc)) { throw 'Inno Setup install failed' }
           (Get-Item $iscc).VersionInfo | Format-List FileVersion, ProductVersion | Out-String | Write-Host
           $lang = Join-Path (Split-Path $iscc) 'Languages'
-          foreach ($m in (Select-String -Path scripts/installer/Veyra.iss -Pattern 'compiler:Languages\\([A-Za-z]+\.isl)').Matches) {
+          foreach ($m in (Select-String -Path scripts/installer/OverRez.iss -Pattern 'compiler:Languages\\([A-Za-z]+\.isl)').Matches) {
             $f = $m.Groups[1].Value
             if (Test-Path (Join-Path $lang $f)) { continue }
             $ok = $false

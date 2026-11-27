@@ -118,7 +118,7 @@ VCamFilter::~VCamFilter()
 
 const wchar_t *VCamFilter::FilterName() const
 {
-	return L"Veyra Virtual Camera";
+	return L"OverRez Virtual Camera";
 }
 
 STDMETHODIMP VCamFilter::Pause()

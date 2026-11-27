@@ -181,7 +181,7 @@ LRESULT CALLBACK videoProc(HWND h, UINT m, WPARAM w, LPARAM l) {
 }
 
 HWND createVideoWindow() {
-    const wchar_t* cls = L"VeyraQmlVideoHost";
+    const wchar_t* cls = L"OverRezVideoHost";
     WNDCLASSEXW wc{sizeof(wc)};
     wc.lpfnWndProc = videoProc;
     wc.hInstance = GetModuleHandleW(nullptr);
@@ -468,7 +468,7 @@ bool reportLogHolders(const std::filesystem::path& path, int openErrno) {
                     && CompareFileTime(&started, &holder.ProcessStartTime) == 0
                     && QueryFullProcessImageNameW(process, 0, image.data(), &size)) {
                     const auto name = std::filesystem::path(std::wstring_view(image.data(), size)).filename();
-                    veyraProcess = _wcsicmp(name.c_str(), L"veyra_qml_ui.exe") == 0;
+                    veyraProcess = _wcsicmp(name.c_str(), L"OverRezApp.exe") == 0;
                 }
                 CloseHandle(process);
             }
@@ -528,7 +528,7 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
     SYSTEMTIME st{};
     GetLocalTime(&st);
     wchar_t name[96]{};
-    swprintf_s(name, L"veyra-crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", unsigned(st.wYear), unsigned(st.wMonth),
+    swprintf_s(name, L"overrez-crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", unsigned(st.wYear), unsigned(st.wMonth),
                unsigned(st.wDay), unsigned(st.wHour), unsigned(st.wMinute), unsigned(st.wSecond), GetCurrentProcessId());
     const std::wstring path = (std::filesystem::path(g_crashDumpDirectory) / name).wstring();
     HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -546,7 +546,7 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
     // start to explain (QmlPlayerBridge reads and deletes it).
     const std::wstring note = L"crash " + std::filesystem::path(moduleName).filename().wstring() + L"\n" +
                               veyra::gfx::riskyInjections() + L"\n";
-    HANDLE marker = CreateFileW((std::filesystem::path(g_crashDumpDirectory) / L"veyra-last-failure.txt").c_str(),
+    HANDLE marker = CreateFileW((std::filesystem::path(g_crashDumpDirectory) / L"overrez-last-failure.txt").c_str(),
                                 GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (marker != INVALID_HANDLE_VALUE) {
         DWORD written = 0;
@@ -596,22 +596,22 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         const char* source = nullptr;
         switch (notice) {
         case instance::Notice::StartingOrClosing:
-            source = "Veyra 正在打开或退出。请稍候再试。";
+            source = "OverRez is starting or closing. Wait a moment and try again.";
             break;
         case instance::Notice::AlreadyOpen:
-            source = "Veyra 已经打开。请切换到原窗口继续使用。";
+            source = "OverRez is already open. Switch to its window to continue.";
             break;
         case instance::Notice::Hung:
-            source = "Veyra（PID %1）未响应。请在任务管理器中检查此进程后重试。";
+            source = "OverRez (PID %1) is not responding. Check the process in Task Manager and try again.";
             break;
         case instance::Notice::ConfirmEnd:
-            source = "Veyra（PID %1）未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？";
+            source = "OverRez (PID %1) is not responding. Ending it may lose an ongoing recording. End it and reopen OverRez?";
             break;
         case instance::Notice::EndPending:
-            source = "旧的 Veyra（PID %1）仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。";
+            source = "The previous OverRez (PID %1) has not exited yet. Windows may still be waiting for a device operation. Restart Windows if the problem persists.";
             break;
         case instance::Notice::EndFailed:
-            source = "Windows 无法确认 Veyra（PID %1）已退出。请在任务管理器中查看此进程。";
+            source = "Windows could not confirm that OverRez (PID %1) exited. Check the process in Task Manager.";
             break;
         }
         if (!source) return false;
@@ -621,7 +621,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         auto message = ui::i18n::text(QString::fromUtf8(source));
         if (value) message = message.arg(value);
         if (!dump.empty()) {
-            message += QStringLiteral("\n\n") + ui::i18n::text(QStringLiteral("反馈时请附上以下转储文件。"))
+            message += QStringLiteral("\n\n") + QStringLiteral("Attach this dump when reporting the issue.")
                        + QStringLiteral("\n") + QString::fromStdWString(dump.wstring());
         }
         ui::i18n::apply(QStringLiteral("zh-CN"));
@@ -633,7 +633,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const auto overrideLength = GetEnvironmentVariableW(L"VEYRA_LOG_FILE", logOverride, 32768);
     auto logPath = overrideLength > 0 && overrideLength < 32768
                        ? std::filesystem::path(logOverride)
-                       : veyra::runtime::logsDirectory() / L"veyra-qml.log";
+                       : veyra::runtime::logsDirectory() / L"overrez.log";
     std::error_code logPathError;
     const auto absoluteLog = std::filesystem::absolute(logPath, logPathError);
     if (!logPathError) logPath = absoluteLog.lexically_normal();
@@ -659,7 +659,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
         const int openErrno = errno;
         const auto mainLog = logPath;
-        logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
+        logPath = logPath.parent_path() / (L"overrez-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
         anotherVeyraLogHolder = reportLogHolders(mainLog, openErrno);
     }
@@ -826,9 +826,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     };
     static NoKeyMenuFilter noKeyMenu;
     app.installNativeEventFilter(&noKeyMenu);
-    app.setApplicationName(QStringLiteral("Veyra"));
-    app.setOrganizationName(QStringLiteral("Veyra"));
-    veyra::log::info("app", "Veyra QML session started");
+    app.setApplicationName(QStringLiteral("OverRez"));
+    app.setOrganizationName(QStringLiteral("OverRez"));
+    veyra::log::info("app", "OverRez session started");
 
     engine::EngineController controller;
 
@@ -876,7 +876,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         const auto started = std::chrono::steady_clock::now();
         const QString testRoot = qEnvironmentVariable("VEYRA_TEST_QML_CACHE_ROOT");
         const auto cache = ui::chooseQmlDiskCache(
-            QCoreApplication::applicationDirPath() + QStringLiteral("/qml/Veyra"),
+            QCoreApplication::applicationDirPath() + QStringLiteral("/qml/OverRez"),
             testRoot.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::CacheLocation) : testRoot,
             qgetenv("QML_DISK_CACHE_PATH"), qgetenv("QML_DISABLE_DISK_CACHE"));
         QString outcome = cache.note;
@@ -1056,7 +1056,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                                             testSize.width(), testSize.height()));
     veyra::log::info("qml-window", std::format("probe mode={}", videoProbeName()));
     engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
-    engine.loadFromModule("Veyra", "Main");
+    engine.loadFromModule("OverRez", "Main");
 
     if (engine.rootObjects().isEmpty()) {
         veyra::log::error("qml", "no root object: the QML module failed to load");
@@ -1418,7 +1418,7 @@ int main(int argc, char** argv) {
     if (result != 42 || program.isEmpty()) return result;
     // Player, QML engine and QApplication have all been destroyed.
     if (QProcess::startDetached(program, arguments)) return 0;
-    MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen OverRez.",
+    MessageBoxW(nullptr, L"Settings saved. Automatic restart failed; please reopen OverRez.",
                 L"OverRez", MB_OK | MB_ICONERROR);
     return 1;
 }

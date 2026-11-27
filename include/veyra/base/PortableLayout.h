@@ -10,13 +10,13 @@
 
 namespace veyra::portable {
 
-inline constexpr auto playerName = L"veyra_qml_ui.exe";
-inline constexpr auto launcherName = L"Veyra.exe";
-inline constexpr auto workerName = L"veyra_update_worker.exe";
+inline constexpr auto playerName = L"OverRezApp.exe";
+inline constexpr auto launcherName = L"OverRez.exe";
+inline constexpr auto workerName = L"OverRezUpdate.exe";
 inline constexpr auto packageMarker = L"portable-package.txt";
 inline constexpr auto versionState = L"current-version.txt";
 inline constexpr auto versionsFolder = L"versions";
-inline constexpr auto updateFolder = L".veyra-update";
+inline constexpr auto updateFolder = L".overrez-update";
 inline constexpr int applyExitCode = 43;
 inline constexpr int overlayRestartExitCode = 44;
 
@@ -60,8 +60,8 @@ inline std::string readSmallFile(const std::filesystem::path& path, size_t limit
 
 inline std::string packageFlavor(const std::filesystem::path& root) {
     const auto marker = readSmallFile(root / packageMarker);
-    if (marker == "VEYRA_PORTABLE_V1\nNVIDIA\n") return "NVIDIA";
-    if (marker == "VEYRA_PORTABLE_V1\nAMD\n") return "AMD";
+    if (marker == "OVERREZ_PORTABLE_V1\nNVIDIA\n") return "NVIDIA";
+    if (marker == "OVERREZ_PORTABLE_V1\nAMD\n") return "AMD";
     return {};
 }
 

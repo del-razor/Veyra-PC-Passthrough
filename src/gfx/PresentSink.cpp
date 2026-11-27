@@ -18,7 +18,7 @@ namespace veyra::gfx {
 
 namespace {
 
-const wchar_t* kWindowClassName = L"VeyraPresentSink";
+const wchar_t* kWindowClassName = L"OverRezPresentSink";
 
 
 } // namespace

@@ -13,8 +13,8 @@ namespace {
 
 using ProcessHandle = std::unique_ptr<void, decltype(&CloseHandle)>;
 using Path = std::filesystem::path;
-constexpr auto ownerName = L".veyra-instance.v1";
-constexpr auto endingName = L".veyra-exit-request.v1";
+constexpr auto ownerName = L".overrez-instance.v1";
+constexpr auto endingName = L".overrez-exit-request.v1";
 constexpr DWORD shortProbeMs = 1200;
 
 uint64_t fileTime(const FILETIME& value) {
@@ -54,7 +54,7 @@ std::optional<DWORD> threadCount(DWORD pid) {
 Path newestHangDump(const Path& directory, DWORD pid, uint64_t created) {
     if (directory.empty() || !created) return {};
     WIN32_FIND_DATAW entry{};
-    const auto pattern = directory / (L"veyra-hang-*-" + std::to_wstring(pid) + L".dmp");
+    const auto pattern = directory / (L"overrez-hang-*-" + std::to_wstring(pid) + L".dmp");
     const HANDLE scan = FindFirstFileW(pattern.c_str(), &entry);
     if (scan == INVALID_HANDLE_VALUE) return {};
     Path newest;
@@ -154,7 +154,7 @@ std::wstring profileKey(const std::filesystem::path& profile) {
     auto path = normalized.wstring();
     CharLowerBuffW(path.data(), DWORD(path.size()));
     const auto hash = sha256Hex(reinterpret_cast<const uint8_t*>(path.data()), path.size() * sizeof(wchar_t));
-    return hash.empty() ? std::wstring{} : L"Local\\Veyra.Qml.Profile." + std::wstring(hash.begin(), hash.end());
+    return hash.empty() ? std::wstring{} : L"Local\\OverRez.Qml.Profile." + std::wstring(hash.begin(), hash.end());
 }
 
 std::wstring launchTarget(std::span<const std::wstring> arguments) {

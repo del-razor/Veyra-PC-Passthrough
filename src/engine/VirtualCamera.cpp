@@ -59,7 +59,7 @@ bool sameFile(const std::filesystem::path& a,const std::filesystem::path& b){
 bool machineCurrent(){
     for(bool x86:{false,true}){
         const auto path=virtualcam::registeredModule(x86,true);
-        if(path.empty()||!sameFile(path,modules()/(x86?L"veyra-virtualcam32.dll":L"veyra-virtualcam64.dll")))return false;
+        if(path.empty()||!sameFile(path,modules()/(x86?L"overrez-virtualcam32.dll":L"overrez-virtualcam64.dll")))return false;
     }
     return true;
 }
@@ -190,7 +190,7 @@ struct VirtualCamera::State {
         else log::info("virtual-camera",std::format("setup completed remove={} machineRegistered={}",setupRemoves,systemInstalled.load()));
     }
     bool setup(bool remove,std::wstring& why){
-        const auto file=modules()/L"veyra-camera-setup.exe";
+        const auto file=modules()/L"overrez-camera-setup.exe";
         {
             std::lock_guard lock(control);
             pollSetupLocked();
@@ -348,12 +348,12 @@ bool VirtualCamera::start(uint32_t rate,std::wstring& error){
     if(s.installing){error=L"正在安装摄像机组件，请等待";return false;}
     if(s.ownership){CloseHandle(s.ownership);s.ownership=nullptr;}
     const auto directory=modules();
-    const auto x64=directory/L"veyra-virtualcam64.dll",x86=directory/L"veyra-virtualcam32.dll";
+    const auto x64=directory/L"overrez-virtualcam64.dll",x86=directory/L"overrez-virtualcam32.dll";
     std::error_code ec;
     if(!std::filesystem::is_regular_file(x64,ec)||!std::filesystem::is_regular_file(x86,ec)){
         error=L"虚拟摄像机组件不完整，请完整解压Veyra软件包";s.fail(error);return false;
     }
-    SetLastError(0);HANDLE owner=CreateMutexW(nullptr,FALSE,L"Local\\VeyraVirtualCameraProducerV1");
+    SetLastError(0);HANDLE owner=CreateMutexW(nullptr,FALSE,L"Local\\OverRezVirtualCameraProducerV1");
     const DWORD last=GetLastError();
     if(!owner||last==ERROR_ALREADY_EXISTS){
         if(owner)CloseHandle(owner);error=L"另一个Veyra实例已启用虚拟摄像机";s.fail(error);return false;

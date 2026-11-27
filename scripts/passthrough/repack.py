@@ -1,13 +1,13 @@
-"""Repack an official Veyra portable ZIP with the OverRez player build.
+"""Build an OverRez portable ZIP and Setup EXE on top of an official Veyra package.
 
-The official NVIDIA / AMD portable ZIPs carry the proprietary GPU runtimes,
-models and the launcher/updater. This fork changes only the player
-(veyra_qml_ui.exe and its QML), so each official package is opened, the
-player and qml/Veyra are replaced with the fork's build, the publisher
-manifest is refreshed for the replaced files, and the same-named portable
-ZIP plus a Setup EXE (scripts/installer/Veyra.iss) are produced.
+The official NVIDIA / AMD portable ZIPs carry the proprietary GPU runtimes and
+models that OverRez reuses. Everything else comes from this repository's build:
+the launcher (OverRez.exe), the app (OverRezApp.exe), its QML (qml/OverRez) and
+the virtual camera. Veyra's own files (launcher, updater, startup music, promo
+art, developer docs, the update trust file, the manifest of the updater) are
+left out, and the package text files are written for OverRez.
 
-usage: python repack.py --official-zip Z --build B --output O --iscc ISCC [--work W]
+usage: python repack.py --official-zip Z --build B --output O --iscc ISCC --work W
 """
 import argparse
 import hashlib
@@ -22,10 +22,24 @@ import zipfile
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
-PLAYER = "veyra_qml_ui.exe"
+UPSTREAM_PLAYER = "veyra_qml_ui.exe"
+PLAYER = "OverRezApp.exe"
+LAUNCHER = "OverRez.exe"
+MARKER = "OVERREZ_PORTABLE_V1"
+# Upstream files and folders OverRez does not ship, relative to the package root
+# (top) or to the version folder (version).
+DROP_TOP = ["Veyra.exe", "START-HERE.txt", "portable-update-trust.json"]
+DROP_VERSION = ["veyra_qml_ui.exe", "veyra_update_worker.exe", "package-manifest.json", "GPU-PACKAGE.txt",
+                "assets", "media", "docs", "i18n", "qml/Veyra", "virtualcam", "runtime/magewell",
+                "licenses/capture", "licenses/magewell", "licenses/moonlight", "licenses/FFMPEG-VEYRA-BUILD.json",
+                "licenses/gpu-dis/VEYRA_INTEGRATION.md"]
+DROP_VERSION_GLOBS = ["README*.md", "RELEASE_*.md"]
+# Upstream files OverRez keeps under its own name (the app looks for the new names).
+RENAME_VERSION = {"runtime/amd-nr-rdna3/veyra_amd_nr_worker.exe": "runtime/amd-nr-rdna3/overrez_amd_nr_worker.exe",
+                  "runtime/amd-nr-rdna3/veyra-rdna3-runtime-manifest.json": "runtime/amd-nr-rdna3/rdna3-runtime-manifest.json",
+                  "licenses/rdna3-nvapi/VEYRA-CHANGES.txt": "licenses/rdna3-nvapi/CHANGES.txt"}
 PRODUCT = "OverRez"
 PRODUCT_VERSION = (ROOT / "OVERREZ_VERSION").read_text(encoding="utf-8").split()[0]
-MANIFEST = "package-manifest.json"
 
 
 def digest(path):
@@ -91,37 +105,49 @@ def add_missing_dlls(version_dir, start, dll_dirs):
     return added
 
 
-def replace_player(version_dir, build, dll_dirs):
+def remove(path):
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def compose(top, upstream_version, build, dll_dirs):
+    """Turn the unpacked official package into the OverRez layout; returns the version folder."""
+    flavor = (top / "portable-package.txt").read_text().splitlines()[1].strip()
+    if flavor not in ("NVIDIA", "AMD"):
+        raise ValueError(f"unexpected package flavor {flavor!r}")
+    source_dir = top / "versions" / upstream_version
+    if not (source_dir / UPSTREAM_PLAYER).is_file():
+        raise ValueError(f"{UPSTREAM_PLAYER} not found in {source_dir}")
+    for name in DROP_TOP:
+        remove(top / name)
+    for name in DROP_VERSION:
+        remove(source_dir / name)
+    for pattern in DROP_VERSION_GLOBS:
+        for match in source_dir.glob(pattern):
+            remove(match)
+    for old, new in RENAME_VERSION.items():
+        if (source_dir / old).exists():
+            (source_dir / old).rename(source_dir / new)
+    version_dir = top / "versions" / PRODUCT_VERSION
+    if version_dir != source_dir:
+        source_dir.rename(version_dir)
+    shutil.copy2(build / LAUNCHER, top / LAUNCHER)
     shutil.copy2(build / PLAYER, version_dir / PLAYER)
-    added = add_missing_dlls(version_dir, version_dir / PLAYER, [build] + dll_dirs)
-    built_qml = build / "qml/Veyra"
-    target_qml = version_dir / "qml/Veyra"
-    if built_qml.is_dir():
-        if target_qml.exists():
-            shutil.rmtree(target_qml)
-        shutil.copytree(built_qml, target_qml)
-    manifest_path = version_dir / MANIFEST
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
-    rows = []
-    for row in manifest["files"]:
-        source = version_dir / row["path"]
-        if row["path"].startswith("qml/Veyra/") or not source.is_file():
-            continue
-        if row["path"] == PLAYER:
-            row = dict(row, size=source.stat().st_size, sha256=digest(source))
-        rows.append(row)
-    for name in added:
-        source = version_dir / name
-        rows.append(dict(path=name, size=source.stat().st_size, sha256=digest(source)))
-    for source in sorted(target_qml.rglob("*")):
-        if source.is_file():
-            rows.append(dict(path=source.relative_to(version_dir).as_posix(),
-                             size=source.stat().st_size, sha256=digest(source)))
-    manifest["files"] = rows
-    manifest["fork"] = dict(repository=os.environ.get("GITHUB_REPOSITORY", ""),
-                            commit=os.environ.get("GITHUB_SHA", ""),
-                            note="OverRez player: screen capture only, with the game mode (mouse passthrough) kept.")
-    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf8")
+    shutil.copytree(build / "qml/OverRez", version_dir / "qml/OverRez")
+    camera = version_dir / "virtualcam"
+    camera.mkdir()
+    for name in ("overrez-virtualcam64.dll", "overrez-virtualcam32.dll", "overrez-camera-setup.exe"):
+        shutil.copy2(build / "virtualcam" / name, camera / name)
+    add_missing_dlls(version_dir, version_dir / PLAYER, [build] + dll_dirs)
+    (top / "portable-package.txt").write_bytes(f"{MARKER}\n{flavor}\n".encode("ascii"))
+    (top / "current-version.txt").write_bytes(f"{PRODUCT_VERSION}\n\n".encode("ascii"))
+    leftovers = [p.relative_to(top).as_posix() for p in top.rglob("*")
+                 if "veyra" in p.name.lower() and not p.is_dir()]
+    if leftovers:
+        raise ValueError("files still named after Veyra: " + ", ".join(leftovers))
+    return flavor, version_dir
 
 
 def write_zip(top, destination):
@@ -187,14 +213,13 @@ def entry(source, folder, name=None):
     return f'Source: "{source}"; DestDir: "{{app}}{folder}"{rename}; Flags: ignoreversion'
 
 
-def build_setup(top, version, flavor, iscc, output, work):
-    """version is the runtime folder (the upstream Veyra release); names use PRODUCT_VERSION."""
+def build_setup(top, flavor, iscc, output, work):
     directory = Path(tempfile.mkdtemp(prefix="iscc-", dir=work))
-    (directory / "veyra-installation.txt").write_bytes(f"OverRez.Win64.{flavor}".encode("ascii"))
-    version_dir = rf"\versions\{version}"
-    files = [entry(directory / "veyra-installation.txt", ""),
+    (directory / "overrez-installation.txt").write_bytes(f"OverRez.Win64.{flavor}".encode("ascii"))
+    version_dir = rf"\versions\{PRODUCT_VERSION}"
+    files = [entry(directory / "overrez-installation.txt", ""),
              entry(iscc.parent / "license.txt", version_dir + r"\licenses", "INNO-SETUP.txt")]
-    skip = {"START-HERE.txt", "current-version.txt"}
+    skip = {"current-version.txt"}
     for source in sorted(top.rglob("*")):
         if not source.is_file():
             continue
@@ -208,11 +233,11 @@ def build_setup(top, version, flavor, iscc, output, work):
     panel, icon = compose_branding(directory)
     out = directory / "output"
     out.mkdir()
-    defines = dict(Flavor=flavor, AppVersion=PRODUCT_VERSION, RuntimeVersion=version, OutputDir=out, PayloadList=payload,
-                   AppIcon=ROOT / "assets/veyra.ico", BrandBackground=ROOT / "qml/Veyra/backdrop-dusk.png",
+    defines = dict(Flavor=flavor, AppVersion=PRODUCT_VERSION, OutputDir=out, PayloadList=payload,
+                   AppIcon=ROOT / "assets/overrez.ico", BrandBackground=ROOT / "qml/OverRez/backdrop.png",
                    BrandPanel=panel, BrandIcon=icon)
     command = [str(iscc), "/Qp"] + [f"/D{k}={str(v).replace('/', os.sep)}" for k, v in defines.items()]
-    command.append(str(ROOT / "scripts/installer/Veyra.iss"))
+    command.append(str(ROOT / "scripts/installer/OverRez.iss"))
     subprocess.run(command, cwd=directory, check=True, timeout=1800)
     name = f"{PRODUCT}-{PRODUCT_VERSION}-{flavor}-win64-setup.exe"
     shutil.move(str(out / name), str(output / name))
@@ -233,21 +258,17 @@ def main():
     args.work.mkdir(parents=True, exist_ok=True)
     unpacked = Path(tempfile.mkdtemp(prefix="zip-", dir=args.work))
     top = extract(args.official_zip, unpacked)
-    (flavor_line,) = [line for line in (top / "portable-package.txt").read_text().splitlines()[1:2]]
-    version = (top / "current-version.txt").read_text().splitlines()[0].strip()
-    version_dir = top / "versions" / version
-    if not (version_dir / PLAYER).is_file():
-        raise ValueError(f"{PLAYER} not found in {version_dir}")
-    replace_player(version_dir, args.build, args.dll_dir)
-    flavor = flavor_line.strip()
+    upstream_version = (top / "current-version.txt").read_text().splitlines()[0].strip()
+    flavor, _ = compose(top, upstream_version, args.build, args.dll_dir)
     stem = f"{PRODUCT}-{PRODUCT_VERSION}-{flavor}-win64-portable"
     renamed = top.with_name(stem)
     top.rename(renamed)
     top = renamed
     zip_out = args.output / f"{stem}.zip"
     write_zip(top, zip_out)
-    setup = build_setup(top, version, flavor, args.iscc, args.output, args.work)
-    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor, version=PRODUCT_VERSION, runtime=version)))
+    setup = build_setup(top, flavor, args.iscc, args.output, args.work)
+    print(json.dumps(dict(zip=str(zip_out), setup=str(setup), flavor=flavor, version=PRODUCT_VERSION,
+                          runtime=upstream_version)))
 
 
 if __name__ == "__main__":

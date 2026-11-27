@@ -24,7 +24,7 @@ struct Local{PSECURITY_DESCRIPTOR value=nullptr;~Local(){if(value)LocalFree(valu
 static void require(bool ok,DWORD code=ERROR_INVALID_DATA){if(!ok)throw code;}
 static void win(bool ok){if(!ok)throw GetLastError();}
 static bool elevated(){Handle token;win(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&token.value));TOKEN_ELEVATION e{};DWORD n=0;win(GetTokenInformation(token.value,TokenElevation,&e,sizeof(e),&n));return e.TokenIsElevated!=0;}
-static fs::path root(){PWSTR p=nullptr;const auto hr=SHGetKnownFolderPath(FOLDERID_ProgramFilesX64,0,nullptr,&p);require(SUCCEEDED(hr),DWORD(hr));fs::path target=fs::path(p)/L"VeyraVirtualCamera";CoTaskMemFree(p);return target;}
+static fs::path root(){PWSTR p=nullptr;const auto hr=SHGetKnownFolderPath(FOLDERID_ProgramFilesX64,0,nullptr,&p);require(SUCCEEDED(hr),DWORD(hr));fs::path target=fs::path(p)/L"OverRezVirtualCamera";CoTaskMemFree(p);return target;}
 static fs::path beside(){wchar_t p[32768]{};const auto n=GetModuleFileNameW(nullptr,p,32768);require(n&&n<32768);return fs::path(p).parent_path();}
 static std::wstring hash(HANDLE f){
     LARGE_INTEGER zero{};win(SetFilePointerEx(f,zero,nullptr,FILE_BEGIN));BCRYPT_ALG_HANDLE algorithm=nullptr;BCRYPT_HASH_HANDLE h=nullptr;
@@ -82,15 +82,15 @@ static void resultFile(const fs::path& folder){
     constexpr char text[]="{\"elevated\":true,\"deviceEnumerated\":true,\"classBound\":true,\"architecture\":64}\n";DWORD written=0;win(WriteFile(file.value,text,DWORD(sizeof(text)-1),&written,nullptr));require(written==sizeof(text)-1,ERROR_WRITE_FAULT);win(FlushFileBuffers(file.value));
 }
 static void install(){
-    const auto source=beside();require(hash(source/L"veyra-virtualcam64.dll")==CameraHash64&&hash(source/L"veyra-virtualcam32.dll")==CameraHash32,ERROR_CRC);
+    const auto source=beside();require(hash(source/L"overrez-virtualcam64.dll")==CameraHash64&&hash(source/L"overrez-virtualcam32.dll")==CameraHash32,ERROR_CRC);
     const auto base=root();ordinaryPath(base.parent_path());directory(base);
     const auto version=base/(std::wstring(L"v1-")+std::wstring(CameraHash64,12)+std::wstring(CameraHash32,12));directory(version);
-    copySecure(source/L"veyra-virtualcam64.dll",version/L"veyra-virtualcam64.dll",CameraHash64);copySecure(source/L"veyra-virtualcam32.dll",version/L"veyra-virtualcam32.dll",CameraHash32);
+    copySecure(source/L"overrez-virtualcam64.dll",version/L"overrez-virtualcam64.dll",CameraHash64);copySecure(source/L"overrez-virtualcam32.dll",version/L"overrez-virtualcam32.dll",CameraHash32);
     for(const auto* name:{L"COPYING.GPL-2.0.txt",L"COPYING.LGPL-2.1.txt",L"ISC-Lain-Bailey.txt"})copySecure(source.parent_path()/L"licenses"/L"virtual-camera"/name,version/name);
     const auto old64=veyra::virtualcam::registeredModule(false,true),old32=veyra::virtualcam::registeredModule(true,true);
     const auto oldUser64=veyra::virtualcam::registeredModule(false),oldUser32=veyra::virtualcam::registeredModule(true);
-    const auto a=veyra::virtualcam::registerModule((version/L"veyra-virtualcam64.dll").c_str(),false,true);
-    auto b=SUCCEEDED(a)?veyra::virtualcam::registerModule((version/L"veyra-virtualcam32.dll").c_str(),true,true):a;
+    const auto a=veyra::virtualcam::registerModule((version/L"overrez-virtualcam64.dll").c_str(),false,true);
+    auto b=SUCCEEDED(a)?veyra::virtualcam::registerModule((version/L"overrez-virtualcam32.dll").c_str(),true,true):a;
     if(SUCCEEDED(b)){
         veyra::virtualcam::unregisterModule(false);veyra::virtualcam::unregisterModule(true);
         b=verifyDevice();
@@ -116,7 +116,7 @@ static void uninstall(){
     // A DLL retained by a consumer is left in place until a later cleanup.
     for(const auto& entry:fs::directory_iterator(base)){
         if(!versionName(entry.path().filename().wstring())||!entry.is_directory())continue;secure(entry.path());
-        for(const auto* name:{L"veyra-virtualcam64.dll",L"veyra-virtualcam32.dll",L"COPYING.GPL-2.0.txt",L"COPYING.LGPL-2.1.txt",L"ISC-Lain-Bailey.txt",L"install-result.json"}){
+        for(const auto* name:{L"overrez-virtualcam64.dll",L"overrez-virtualcam32.dll",L"COPYING.GPL-2.0.txt",L"COPYING.LGPL-2.1.txt",L"ISC-Lain-Bailey.txt",L"install-result.json"}){
             const auto file=entry.path()/name;if(!fs::exists(file))continue;secure(file);if(!DeleteFileW(file.c_str()))std::fwprintf(stderr,L"retained locked component: %ls (%lu)\n",file.c_str(),GetLastError());
         }
         RemoveDirectoryW(entry.path().c_str());
@@ -129,12 +129,12 @@ int wmain(int argc,wchar_t** argv){
     try{
         require(argc==2,ERROR_INVALID_PARAMETER);const std::wstring mode=argv[1];
         if(mode==L"--verify"){
-            require(hash(beside()/L"veyra-virtualcam64.dll")==CameraHash64&&hash(beside()/L"veyra-virtualcam32.dll")==CameraHash32,ERROR_CRC);
-            std::wprintf(L"Verified Veyra camera payload. Target: %ls\n",root().c_str());return 0;
+            require(hash(beside()/L"overrez-virtualcam64.dll")==CameraHash64&&hash(beside()/L"overrez-virtualcam32.dll")==CameraHash32,ERROR_CRC);
+            std::wprintf(L"Verified OverRez camera payload. Target: %ls\n",root().c_str());return 0;
         }
         require(mode==L"--install"||mode==L"--uninstall",ERROR_INVALID_PARAMETER);require(elevated(),ERROR_ELEVATION_REQUIRED);
         if(mode==L"--install")install();else uninstall();
         SendNotifyMessageW(HWND_BROADCAST,WM_DEVICECHANGE,DBT_DEVNODES_CHANGED,0);return 0;
-    }catch(DWORD error){std::fprintf(stderr,"Veyra camera setup failed: 0x%08lX\n",error);return int(error?error:ERROR_GEN_FAILURE);}
-    catch(const std::exception& e){std::fprintf(stderr,"Veyra camera setup failed: %s\n",e.what());return ERROR_GEN_FAILURE;}
+    }catch(DWORD error){std::fprintf(stderr,"OverRez camera setup failed: 0x%08lX\n",error);return int(error?error:ERROR_GEN_FAILURE);}
+    catch(const std::exception& e){std::fprintf(stderr,"OverRez camera setup failed: %s\n",e.what());return ERROR_GEN_FAILURE;}
 }

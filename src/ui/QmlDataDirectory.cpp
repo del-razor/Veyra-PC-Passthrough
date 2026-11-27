@@ -10,7 +10,7 @@ namespace {
 constexpr std::array<std::wstring_view, 9> kLegacyFiles{
     L"presets.v1", L"user-presets.v1", L"nr-presets.v1", L"last-applied.v1",
     L"ui-session.v1", L"ui-preferences.v1", L"capture-preferences.v1",
-    L"color-looks.v1", L"veyra.ini"
+    L"color-looks.v1", L"overrez.ini"
 };
 
 bool copyOnce(const std::filesystem::path& source, const std::filesystem::path& target,

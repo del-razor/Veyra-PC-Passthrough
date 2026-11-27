@@ -16,7 +16,7 @@
 namespace veyra::media {
 namespace {
 
-constexpr wchar_t kClassName[] = L"VeyraFormatBadge";
+constexpr wchar_t kClassName[] = L"OverRezFormatBadge";
 
 LRESULT CALLBACK badgeProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     if (message == WM_NCHITTEST) return HTTRANSPARENT;   // clicks belong to the picture

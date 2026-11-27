@@ -24,7 +24,7 @@ void QmlPlayerBridge::setVirtualCameraEnabled(bool enabled){
         std::wstring error;
         const bool before=virtualCameraEnabled();
         if(impl_->engine.setVirtualCamera(enabled,uint32_t(virtualCameraFps()),error)){
-            if(enabled&&!before)emit notice(tr("虚拟摄像机已启用，在直播软件中选择 Veyra Virtual Camera"),false);
+            if(enabled&&!before)emit notice(tr("虚拟摄像机已启用，在直播软件中选择 OverRez Virtual Camera"),false);
         }else if(!error.empty()&&!impl_->engine.virtualCameraSnapshot().failed){
             emit notice(i18n::text(error),true);
         }

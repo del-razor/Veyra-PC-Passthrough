@@ -1,6 +1,6 @@
-// Veyra device identity; distinct from OBS. Do not change across updates.
+// OverRez device identity; distinct from OBS and from Veyra. Do not change across updates.
 #pragma once
 #include <guiddef.h>
-inline constexpr GUID CLSID_Veyra_VirtualVideo={0x05e6f0dc,0xfb79,0x51d0,{0xb7,0x40,0x43,0x53,0x93,0x65,0xdc,0x5c}};
-inline constexpr wchar_t VeyraCameraClsid[]=L"{05E6F0DC-FB79-51D0-B740-43539365DC5C}";
-inline constexpr wchar_t VeyraCameraName[]=L"Veyra Virtual Camera";
+inline constexpr GUID CLSID_Veyra_VirtualVideo={0xe144dc64,0x9e83,0x4123,{0x87,0x8b,0xa7,0xd5,0x5d,0x27,0xfe,0x1f}};
+inline constexpr wchar_t VeyraCameraClsid[]=L"{E144DC64-9E83-4123-878B-A7D55D27FE1F}";
+inline constexpr wchar_t VeyraCameraName[]=L"OverRez Virtual Camera";

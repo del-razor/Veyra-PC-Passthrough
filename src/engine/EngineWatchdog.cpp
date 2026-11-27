@@ -144,7 +144,7 @@ bool writeDump(const char* category, bool captureDriver) {
     if (!write) { log::error(category, "minidump unavailable (dbghelp)"); return false; }
     SYSTEMTIME st{};
     GetLocalTime(&st);
-    auto name = std::format(L"veyra-hang-{:04}{:02}{:02}-{:02}{:02}{:02}-{}", st.wYear, st.wMonth, st.wDay,
+    auto name = std::format(L"overrez-hang-{:04}{:02}{:02}-{:02}{:02}{:02}-{}", st.wYear, st.wMonth, st.wDay,
                             st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
     if (captureDriver) name += L"-capture-" + std::to_wstring(++g_captureDumpSerial);
     const auto path = std::filesystem::path(directory) / (name + L".dmp");

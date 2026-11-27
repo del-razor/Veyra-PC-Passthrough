@@ -72,7 +72,7 @@ static void object_name(wchar_t* out,const wchar_t* kind){
     for(size_t i=0;suffix[i];++i)
         if(!((suffix[i]>=L'a'&&suffix[i]<=L'z')||(suffix[i]>=L'A'&&suffix[i]<=L'Z')||(suffix[i]>=L'0'&&suffix[i]<=L'9')||suffix[i]==L'-')){suffix[0]=0;break;}
     /* V2: a protocol-1 camera module finds no queue (its placeholder) instead of misreading this one. */
-    _snwprintf_s(out,192,_TRUNCATE,L"Local\\VeyraVirtualCamera%sV2%s%s",kind,suffix[0]?L"-":L"",suffix);
+    _snwprintf_s(out,192,_TRUNCATE,L"Local\\OverRezVirtualCamera%sV2%s%s",kind,suffix[0]?L"-":L"",suffix);
 }
 static bool valid_extent(uint32_t cx,uint32_t cy){
     return cx>=2&&cy>=2&&cx<=8192&&cy<=8192&&!(cx&1)&&!(cy&1)&&(uint64_t)cx*cy<=33554432u;

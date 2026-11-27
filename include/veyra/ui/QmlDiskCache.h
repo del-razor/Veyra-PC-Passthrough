@@ -25,7 +25,7 @@ struct QmlDiskCacheChoice {
     QString note;
 };
 
-// moduleDir: the application's own QML module (<app>/qml/Veyra). Qt's modules
+// moduleDir: the application's own QML module (<app>/qml/OverRez). Qt's modules
 // need no digest: a Qt upgrade changes the Qt version and compile hash that Qt
 // already checks. cacheRoot: the user's cache folder. explicitPath and
 // disableCache: the current QML_DISK_CACHE_PATH and QML_DISABLE_DISK_CACHE,

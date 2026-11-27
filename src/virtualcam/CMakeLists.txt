@@ -27,7 +27,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 8)
 else()
   set(VCAM_BITS 32)
 endif()
-set_target_properties(veyra_virtualcam_module PROPERTIES OUTPUT_NAME "veyra-virtualcam${VCAM_BITS}" PREFIX ""
+set_target_properties(veyra_virtualcam_module PROPERTIES OUTPUT_NAME "overrez-virtualcam${VCAM_BITS}" PREFIX ""
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/virtualcam" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/virtualcam"
   RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/virtualcam" LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/virtualcam"
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -47,11 +47,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
     BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --parallel 1 --target veyra_virtualcam_module
     INSTALL_COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-      <BINARY_DIR>/virtualcam/veyra-virtualcam32.dll "${CMAKE_BINARY_DIR}/virtualcam/veyra-virtualcam32.dll")
+      <BINARY_DIR>/virtualcam/overrez-virtualcam32.dll "${CMAKE_BINARY_DIR}/virtualcam/overrez-virtualcam32.dll")
   set(VCAM_HASH_HEADER "${CMAKE_CURRENT_BINARY_DIR}/CameraPayloadHashes.h")
   add_custom_command(OUTPUT "${VCAM_HASH_HEADER}"
     COMMAND "${CMAKE_COMMAND}" "-DVCAM64=$<TARGET_FILE:veyra_virtualcam_module>"
-      "-DVCAM32=${CMAKE_BINARY_DIR}/virtualcam/veyra-virtualcam32.dll" "-DOUTPUT=${VCAM_HASH_HEADER}"
+      "-DVCAM32=${CMAKE_BINARY_DIR}/virtualcam/overrez-virtualcam32.dll" "-DOUTPUT=${VCAM_HASH_HEADER}"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/GeneratePayloadHashes.cmake"
     DEPENDS veyra_virtualcam_module veyra_virtualcam_x86 "${CMAKE_CURRENT_SOURCE_DIR}/GeneratePayloadHashes.cmake")
   add_executable(veyra_virtualcam_setup CameraSetup.cpp CameraRegistration.cpp "${VCAM_HASH_HEADER}")
@@ -60,7 +60,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   target_compile_options(veyra_virtualcam_setup PRIVATE /utf-8)
   target_compile_definitions(veyra_virtualcam_setup PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_link_libraries(veyra_virtualcam_setup PRIVATE advapi32 bcrypt shell32 ole32 oleaut32 uuid user32 strmiids)
-  set_target_properties(veyra_virtualcam_setup PROPERTIES OUTPUT_NAME "veyra-camera-setup"
+  set_target_properties(veyra_virtualcam_setup PROPERTIES OUTPUT_NAME "overrez-camera-setup"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/virtualcam" MSVC_RUNTIME_LIBRARY "MultiThreaded")
   add_custom_target(veyra_virtualcam_components DEPENDS veyra_virtualcam_setup)
 endif()

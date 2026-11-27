@@ -54,14 +54,14 @@ struct FailureText {
 FailureText failureText(FailureKind kind) {
     using namespace launcherText;
     switch (kind) {
-    case FailureKind::Missing: return {L"missing", missing, L"Main program file not found. Repair Veyra with the official installer or check Protection history in Windows Security."};
-    case FailureKind::Reparse: return {L"reparse", redirected, L"The program path contains a link or cloud placeholder. Put Veyra in a regular local folder."};
-    case FailureKind::WrongType: return {L"wrong-type", wrongType, L"The program path has an unexpected file type. Repair Veyra with the official installer."};
+    case FailureKind::Missing: return {L"missing", missing, L"Main program file not found. Repair OverRez by reinstalling it or check Protection history in Windows Security."};
+    case FailureKind::Reparse: return {L"reparse", redirected, L"The program path contains a link or cloud placeholder. Put OverRez in a regular local folder."};
+    case FailureKind::WrongType: return {L"wrong-type", wrongType, L"The program path has an unexpected file type. Repair OverRez by reinstalling it."};
     case FailureKind::Inspect: return {L"inspect", inspect, L"Windows could not read the program path."};
     case FailureKind::Wait: return {L"wait", wait, L"Windows could not wait for the program to exit."};
     case FailureKind::ExitCode: return {L"exit-code", exitCode, L"Windows could not read the program's exit code."};
     case FailureKind::Loader: return {L"loader", start, L"Windows could not load the program."};
-    case FailureKind::Lock: return {L"lock", lock, L"Windows could not acquire the installation lock. Check access to the Veyra folder."};
+    case FailureKind::Lock: return {L"lock", lock, L"Windows could not acquire the installation lock. Check access to the OverRez folder."};
     case FailureKind::Start: return {L"start", start, L"Windows could not start the program."};
     }
     return {L"start", start, L"Windows could not start the program."};
@@ -112,7 +112,7 @@ RunResult run(const fs::path& program, const std::vector<std::wstring>& args) {
 }
 
 int showError(const wchar_t* message) {
-    MessageBoxW(nullptr, message, L"Veyra", MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, message, L"OverRez", MB_OK | MB_ICONERROR);
     return 1;
 }
 
@@ -167,7 +167,7 @@ fs::path recordFailure(const fs::path& root, const fs::path& program, const Fail
     if (!length || length >= std::size(local)) return {};
     const fs::path localRoot(local);
     if (!localRoot.is_absolute() || !plainPath(localRoot, true)) return {};
-    const auto fallback = localRoot / L"Veyra";
+    const auto fallback = localRoot / L"OverRez";
     std::error_code error;
     fs::create_directory(fallback, error);
     if (error || !plainPath(fallback, true) || !writeSmallFile(fallback / name, data)) return {};
@@ -176,13 +176,12 @@ fs::path recordFailure(const fs::path& root, const fs::path& program, const Fail
 
 void showFailure(const fs::path& program, const Failure& failure, const fs::path& diagnostic) {
     const auto wording = failureText(failure.kind);
-    std::wstring message = std::wstring(wording.chinese) + L"\n" + wording.english;
+    std::wstring message = wording.english;
     const auto system = systemMessage(failure);
     if (failure.kind == FailureKind::Loader) {
         message += std::format(L"\nNTSTATUS 0x{:08X}", failure.code);
     } else if (failure.code) {
-        message += L"\n" + std::format(launcherText::windowsError, failure.code)
-            + L" / Windows error " + std::to_wstring(failure.code);
+        message += L"\nWindows error " + std::to_wstring(failure.code);
         if (!system.empty()) message += L"\n" + system;
     }
     const wchar_t* advice = nullptr;
@@ -197,7 +196,7 @@ void showFailure(const fs::path& program, const Failure& failure, const fs::path
     case kInvalidImage:
     case kInvalidImageNotMz:
         advice = launcherText::damaged;
-        english = L"The file may be damaged or incompatible with this Windows system. Repair Veyra with the official installer.";
+        english = L"The file may be damaged or incompatible with this Windows system. Repair OverRez by reinstalling it.";
         break;
     case ERROR_VIRUS_INFECTED:
     case ERROR_VIRUS_DELETED:
@@ -206,49 +205,42 @@ void showFailure(const fs::path& program, const Failure& failure, const fs::path
         break;
     case kDllNotFound:
         advice = launcherText::dependency;
-        english = L"The program is missing runtime components. Repair Veyra with the official installer.";
+        english = L"The program is missing runtime components. Repair OverRez by reinstalling it.";
         break;
     }
-    if (advice) message += L"\n\n" + std::wstring(advice) + L"\n" + english;
+    if (advice) message += L"\n\n" + std::wstring(english);
     message += L"\n\n" + program.native();
     if (failure.path != program) message += L"\n" + failure.path.native();
-    if (!diagnostic.empty()) message += L"\n\n" + std::wstring(launcherText::logPath) + L" / Diagnostic log\n" + diagnostic.native();
+    if (!diagnostic.empty()) message += L"\n\nDiagnostic log\n" + diagnostic.native();
     showError(message.c_str());
 }
 
 bool instanceNotice(instance::Notice notice, DWORD pid, const fs::path& dump) {
-    const auto identifier = L"Veyra (PID " + std::to_wstring(pid) + L")";
+    const auto identifier = L"OverRez (PID " + std::to_wstring(pid) + L")";
     if (notice == instance::Notice::ConfirmEnd) {
-        const auto question = identifier
-            + L" 未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？\n\n"
-            + identifier + L" is not responding. Ending it may lose an ongoing recording. End it and reopen Veyra?";
-        return MessageBoxW(nullptr, question.c_str(), L"Veyra", MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING) == IDYES;
+        const auto question = identifier + L" is not responding. Ending it may lose an ongoing recording. End it and reopen OverRez?";
+        return MessageBoxW(nullptr, question.c_str(), L"OverRez", MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING) == IDYES;
     }
     std::wstring message;
     if (notice == instance::Notice::EndPending) {
-        message = identifier
-            + L" 仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。\n\n"
-            + identifier + L" has not exited. Windows may still be waiting for a device operation. "
-              L"If you use a USB capture card, reconnect it and open Veyra again. Restart Windows if the problem persists.";
+        message = identifier + L" has not exited. Windows may still be waiting for a device operation. "
+              L"Restart Windows if the problem persists.";
     } else if (notice == instance::Notice::EndFailed) {
-        message = L"Windows 无法确认 " + identifier + L" 已退出。请在任务管理器中查看此进程。\n\n"
-            + L"Windows could not confirm that " + identifier + L" exited. Check the process in Task Manager.";
+        message = L"Windows could not confirm that " + identifier + L" exited. Check the process in Task Manager.";
     } else if (notice == instance::Notice::Hung) {
-        message = identifier
-            + L" 未响应。请在任务管理器中检查此进程。\n"
-            + identifier + L" is not responding. Check the process in Task Manager.";
+        message = identifier + L" is not responding. Check the process in Task Manager.";
     } else if (notice == instance::Notice::StartingOrClosing) {
-        message = L"Veyra 正在打开或退出。请稍候再试。\nVeyra is starting or closing. Wait a moment and try again.";
+        message = L"OverRez is starting or closing. Wait a moment and try again.";
     } else {
-        message = L"Veyra 已经打开。请切换到原窗口继续使用。\nVeyra is already open. Switch to its window to continue.";
+        message = L"OverRez is already open. Switch to its window to continue.";
     }
-    if (!dump.empty()) message += L"\n\n反馈时请附上以下转储文件。\nAttach this dump when reporting the issue.\n" + dump.wstring();
+    if (!dump.empty()) message += L"\n\nAttach this dump when reporting the issue.\n" + dump.wstring();
     showError(message.c_str());
     return false;
 }
 
 HANDLE openRunLock(const fs::path& root) {
-    return CreateFileW((root / L".veyra-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
+    return CreateFileW((root / L".overrez-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
                        0, nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
 }
 } // namespace
@@ -260,7 +252,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     const auto root = fs::path(executable).parent_path();
     const auto versions = root / versionsFolder;
     if (packageFlavor(root).empty() || !plainPath(root / versionState, false))
-        return showError(L"便携包文件不完整，请重新解压。\nExtract the complete Veyra portable ZIP.");
+        return showError(L"Some files are missing. Extract the complete OverRez portable ZIP again.");
 
     int count = 0;
     auto* wide = CommandLineToArgvW(GetCommandLineW(), &count);
@@ -301,10 +293,10 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if (lockError == ERROR_SHARING_VIOLATION && owner.reportStalledOwner(instanceNotice)) return 0;
     }
     if (lockError == ERROR_SHARING_VIOLATION)
-        return showError(L"这份 Veyra 正在运行或更新。\nThis copy of Veyra is running or updating.");
+        return showError(L"This copy of OverRez is already running.");
     if (lockError != ERROR_SUCCESS) {
         const auto current = installedVersions(root).current;
-        const auto path = root / L".veyra-running.lock";
+        const auto path = root / L".overrez-running.lock";
         const auto program = current.empty() ? path : versions / current / playerName;
         const Failure failure{FailureKind::Lock, lockError, path};
         const auto diagnostic = recordFailure(root, program, failure, false);
@@ -313,7 +305,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
 
     auto state = installedVersions(root);
-    if (state.current.empty()) return showError(L"便携包版本记录损坏。\nInvalid Veyra version record.");
+    if (state.current.empty()) return showError(L"The OverRez version record is damaged. Reinstall OverRez.");
 
     auto rollback = [&] {
         if (state.previous.empty() || !plainPath(versions, true) || !plainPath(versions / state.previous, true)
@@ -326,7 +318,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         return true;
     };
     if (manualRollback && !rollback())
-        return showError(L"没有可恢复的版本。\nNo previous version is available.");
+        return showError(L"No previous version is available.");
 
     auto args = std::move(initialArgs);
     for (;;) {

@@ -3,7 +3,7 @@
 usage: python -B scripts/i18n/extract.py [--check]
 
 Sources (Simplified Chinese is the source language and the lookup key):
-  * QML: the argument of every qsTr("...") in qml/Veyra;
+  * QML: the argument of every qsTr("...") in qml/OverRez;
   * C++ UI: tr("...") / QCoreApplication::translate(..., "...") and the other Chinese literals in
     src/ui and apps/veyra-qml (fixed tables and wide-string messages shown through uiText());
   * engine messages: Chinese wide literals in src/** that reach the interface as status or error
@@ -116,7 +116,7 @@ def collect():
         if s and HAN.search(s):
             found.setdefault((s, ctx), where)
 
-    for f in sorted((ROOT / 'qml/Veyra').glob('*.qml')):
+    for f in sorted((ROOT / 'qml/OverRez').glob('*.qml')):
         for s, ctx in qml_strings(f.read_text(encoding='utf-8')):
             add(s, 'qml/' + f.name, ctx)
     cpp = list((ROOT / 'src/ui').rglob('*.cpp')) + list((ROOT / 'apps/veyra-qml').glob('*.cpp'))
