@@ -18,14 +18,8 @@ if(NOT VEYRA_DISPLAY_VERSION MATCHES "^${PROJECT_VERSION}")
   set(VEYRA_DISPLAY_VERSION "${PROJECT_VERSION}" CACHE STRING "Human-readable version string" FORCE)
 endif()
 
-# ---------------------------------------------------------------------------
-# Linux: the OBS filter module only. Every target below is COM / D3D11 / D3D12
-# / Win32 bound, so the portable part of the pipeline lives in linux/ instead
-# of growing ifdefs through 100k lines of Windows code. See docs/OBS_FILTER.md.
-# ---------------------------------------------------------------------------
 if(NOT WIN32)
-  add_subdirectory(linux/obs)
-  return()
+  message(FATAL_ERROR "This app builds on Windows only")
 endif()
 add_subdirectory(src/virtualcam)
 
@@ -527,58 +521,11 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # composes veyra_media; no second decode implementation exists.
   add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_dynamic veyra_shader_hud_lock_fill veyra_shader_hud_lock_compose veyra_shader_hud_protect_motion veyra_shader_hud_protect_detect veyra_shader_hud_protect_repair veyra_shader_hud_protect_flow veyra_shader_hud_protect_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change veyra_shader_rife_pack veyra_shader_rife_unpack veyra_shader_rife_shot_change)
   add_library(veyra_sources STATIC
-    src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
-    src/source/CaptureCardSource.cpp
-    src/source/DeckLinkCapture.cpp
-    src/source/DeckLinkDriver.cpp
-    src/source/ElgatoHdrControl.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/VirtualDesktop.cpp
-    src/source/AverMediaAudioSwitch.cpp
-    src/source/AverMediaVendorAudio.cpp
-    src/source/AverMediaAudioCarrier.cpp
-    src/source/CaptureCompressedDecoder.cpp
-    src/source/WasapiAudioInput.cpp
-    src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
-  # Optional external DeckLink SDK. Generate the official COM ABI outside the
-  # source tree; Desktop Video supplies the installed COM server at run time.
-  set(VEYRA_DECKLINK_SDK_DIR "" CACHE PATH "External DeckLink SDK Win IDL directory")
-  if(VEYRA_DECKLINK_SDK_DIR AND NOT EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
-    message(FATAL_ERROR "VEYRA_DECKLINK_SDK_DIR must contain the external Win DeckLinkAPI.idl")
-  endif()
-  if(VEYRA_DECKLINK_SDK_DIR AND EXISTS "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl")
-    find_program(VEYRA_MIDL_EXECUTABLE midl REQUIRED)
-    set(VEYRA_DECKLINK_GENERATED "${CMAKE_CURRENT_BINARY_DIR}/decklink-generated")
-    file(MAKE_DIRECTORY "${VEYRA_DECKLINK_GENERATED}")
-    file(GLOB VEYRA_DECKLINK_IDL_DEPENDS "${VEYRA_DECKLINK_SDK_DIR}/*.idl")
-    add_custom_command(OUTPUT "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h"
-      COMMAND "${VEYRA_MIDL_EXECUTABLE}" /nologo /env x64 /I "${VEYRA_DECKLINK_SDK_DIR}"
-        /out "${VEYRA_DECKLINK_GENERATED}" /h DeckLinkAPI_h.h
-        /iid DeckLinkAPI_i.c /tlb DeckLinkAPI.tlb /client none /server none
-        "${VEYRA_DECKLINK_SDK_DIR}/DeckLinkAPI.idl"
-      DEPENDS ${VEYRA_DECKLINK_IDL_DEPENDS} VERBATIM)
-    add_custom_target(veyra_decklink_abi DEPENDS "${VEYRA_DECKLINK_GENERATED}/DeckLinkAPI_h.h")
-    add_dependencies(veyra_sources veyra_decklink_abi)
-    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES
-      COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=1 INCLUDE_DIRECTORIES "${VEYRA_DECKLINK_GENERATED}")
-    message(STATUS "DeckLink native capture ABI: ${VEYRA_DECKLINK_SDK_DIR}")
-  else()
-    set_source_files_properties(src/source/DeckLinkDriver.cpp PROPERTIES COMPILE_DEFINITIONS VEYRA_HAS_DECKLINK=0)
-    message(STATUS "DeckLink native capture: no SDK configured (DirectShow remains available)")
-  endif()
-  # Magewell Pro Capture low-latency video: compiled against the vendor SDK headers when
-  # VEYRA_MAGEWELL_SDK_DIR points at them (kept outside the source tree); LibMWCapture.dll is
-  # loaded at run time. Without the headers the feature reports itself unavailable.
-  set(VEYRA_MAGEWELL_SDK_DIR "" CACHE PATH "MWCapture SDK root containing Include/LibMWCapture")
-  if(VEYRA_MAGEWELL_SDK_DIR AND EXISTS "${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture/MWCapture.h")
-    set_source_files_properties(src/source/MagewellCapture.cpp PROPERTIES
-      COMPILE_DEFINITIONS VEYRA_HAS_MAGEWELL=1
-      INCLUDE_DIRECTORIES "${VEYRA_MAGEWELL_SDK_DIR}/Include;${VEYRA_MAGEWELL_SDK_DIR}/Include/LibMWCapture")
-    message(STATUS "Magewell SDK headers: ${VEYRA_MAGEWELL_SDK_DIR}")
-  endif()
   target_compile_options(veyra_sources PRIVATE /WX-)
   target_compile_features(veyra_sources PRIVATE cxx_std_20)
   target_link_libraries(veyra_sources PUBLIC veyra_sinks)
@@ -711,8 +658,6 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Preferences.cpp
     src/ui/bridge/AnrDownload.cpp
     src/ui/bridge/Capture.cpp
-    src/ui/bridge/VirtualCaptureAudioSetup.cpp
-    src/ui/bridge/VirtualCaptureAudioSetup.h
     src/ui/bridge/Export.cpp
     src/ui/bridge/Subtitles.cpp
     src/ui/bridge/Playback.cpp

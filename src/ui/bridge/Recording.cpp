@@ -187,7 +187,6 @@ void QmlPlayerBridge::quit() {
     if (auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) app->quit();
 }
 
-void QmlPlayerBridge::openCaptureDialog() { emit navigate(QStringLiteral("capture")); }
 void QmlPlayerBridge::openScreenCaptureDialog() { emit navigate(QStringLiteral("screen")); }
 void QmlPlayerBridge::openAudioDialog() { emit navigate(QStringLiteral("audio")); }
 

@@ -189,10 +189,6 @@ QRect QmlPlayerBridge::launchScreenAvailable() const {
 }
 
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
-    if(key==QLatin1String("blackmagicNativeCapture")){
-        if(captureQueryBusy()){emit notice(tr("请等待采集设备查询完成后再切换接口"),true);return false;}
-        if(captureBlackmagicDevice())impl_->prefs[source::decklink::isPath(impl_->captureDevice)?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice"]=utf8Of(impl_->captureDevice);
-    }
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
@@ -380,10 +376,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
         const auto corner=impl_->prefs.value(QStringLiteral("fullscreenFrameStatsCorner"),1).toInt();
         impl_->engine.setFullscreenFrameStats(impl_->prefBool("fullscreenFrameStats",false)?std::clamp(corner,0,3):-1);
     }
-    if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
-    else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
-    else if (key == QLatin1String("blackmagicNativeCapture")) { if(impl_->captureListed)refreshCaptureDevices();emit captureChanged(); }
-    else if (key == QLatin1String("language")) {
+    if (key == QLatin1String("language")) {
         const QString code = i18n::resolve(impl_->prefString("language"));
         if (!i18n::apply(code)) emit notice(tr("这个语言的翻译没有找到，界面保持简体中文"), true);
         if (impl_->qmlEngine) {
@@ -794,15 +787,6 @@ QString QmlPlayerBridge::sourceFormatText() const {
     const QString rate = sourceRateText();
     if (rate.isEmpty()) return {};
     parts << rate;
-    if (sourceKind() == QLatin1String("capture")) {
-        for (const auto& f : impl_->captureFormatList)
-            if (f.key == impl_->captureFormatKey) {
-                const QString label = uiText(f.label);
-                const int dot = label.lastIndexOf(QString::fromUtf8("·"));
-                if (dot >= 0) parts << label.mid(dot + 1).trimmed();
-                break;
-            }
-    }
     const QString colour = uiText(impl_->snapshot.colorStatus);
     if (!colour.isEmpty()) parts << colour.section(QString::fromUtf8(" → "), 0, 0).trimmed();
     return parts.join(QString::fromUtf8(" · "));
@@ -874,38 +858,6 @@ bool QmlPlayerBridge::colourPaste() {
 }
 
 
-QString QmlPlayerBridge::capturePreviewUrl() const {
-    const auto& s = impl_->snapshot;
-    if (!s.running || s.posterRgba.empty() || !s.posterWidth || !s.posterHeight) return {};
-    if (impl_->posterSession != s.sessionId || impl_->posterUrl.isEmpty()) {
-        const QImage image(s.posterRgba.data(), int(s.posterWidth), int(s.posterHeight), int(s.posterWidth * 4),
-                           QImage::Format_RGBA8888);
-        QByteArray png;
-        QBuffer buffer(&png);
-        buffer.open(QIODevice::WriteOnly);
-        image.save(&buffer, "PNG");
-        impl_->posterSession = s.sessionId;
-        impl_->posterUrl = png.isEmpty() ? QString()
-                                         : QStringLiteral("data:image/png;base64,") + QString::fromLatin1(png.toBase64());
-    }
-    return impl_->posterUrl;
-}
-QString QmlPlayerBridge::captureSignalLevel() const {
-    const auto& s = impl_->snapshot;
-    if (s.captureDriverWaitMs) return QStringLiteral("warn");
-    if (!s.running || !s.capture) return QStringLiteral("idle");
-    if (s.captureRecovering) return QStringLiteral("warn");
-    if (s.captureSampledBlack) return QStringLiteral("warn");
-    return s.captureFps > 0.5 ? QStringLiteral("ok") : QStringLiteral("warn");
-}
-QString QmlPlayerBridge::captureSignalText() const {
-    const auto& s = impl_->snapshot;
-    if (s.captureDriverWaitMs) return tr("等待采集卡驱动");
-    if (captureSignalLevel() == QLatin1String("idle")) return tr("未连接");
-    if (s.captureRecovering) return tr("正在恢复");
-    if (s.captureFps > 0.5 && s.captureSampledBlack) return tr("收到黑帧 · 检查输入制式");
-    return s.captureFps > 0.5 ? tr("正在收帧") : tr("等待信号");
-}
 
 void QmlPlayerBridge::importPresetDialog() {
     const QString path = QFileDialog::getOpenFileName(nullptr, tr("导入预设"), QString(),

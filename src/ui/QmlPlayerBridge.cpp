@@ -474,7 +474,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         updateMaskOverlay();
         tickSubtitles();
-        tickCapture();
         // Geometry uses the source DAR and the same transform as mouse/compare.
         if (impl_->snapshot.running && impl_->videoWindow) {
             const bool fresh = impl_->aspectSession != impl_->snapshot.sessionId;
@@ -563,13 +562,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     QFile marker(lastFailurePath());
                     if (marker.open(QIODevice::WriteOnly)) marker.write((QStringLiteral("device\n") + injected + QStringLiteral("\n")).toUtf8());
                 }
-                const auto now = std::chrono::steady_clock::now();
-                const bool reconnect = s.gpuFailed && !s.remotePlay && impl_->liveKind == QLatin1String("capture") &&
-                    (impl_->gpuReconnectLast == std::chrono::steady_clock::time_point{} || now - impl_->gpuReconnectLast > std::chrono::minutes(10));
-                if (s.gpuFailed) veyra::log::warn("gpu-reconnect", std::format("session={} kind={} automatic={}", s.sessionId, impl_->liveKind.toStdString(), reconnect));
-                if (reconnect) { impl_->gpuReconnectSession = s.sessionId; impl_->gpuReconnectDue = {}; text += QStringLiteral("；") + tr("将自动重新连接采集卡一次"); }
                 emit notice(text, true);
-                if (!reconnect && impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
+                if (impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
             // Engine watchdog (field logs(15)): a frozen picture says why, once.
             if (had && !wasCaptureDriverWaiting && s.captureDriverWaitMs) emit notice(statusText(), true);
@@ -599,24 +593,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // 「自动」倍率：每个会话进入播放后决定一次（见 applyFgAutoMultiplier）。
             maybeApplyFgAutoMultiplier();
             emit snapshotChanged();
-        }
-        // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
-        // seconds) and is dropped if anything else was opened meanwhile.
-        if (impl_->gpuReconnectSession) {
-            const auto& s = impl_->snapshot;
-            const auto now = std::chrono::steady_clock::now();
-            if (s.sessionId != impl_->gpuReconnectSession || impl_->openingSource) {
-                veyra::log::info("gpu-reconnect", "cancelled: another source was opened");
-                impl_->gpuReconnectSession = 0;
-            } else if (!s.running) {
-                if (impl_->gpuReconnectDue == std::chrono::steady_clock::time_point{}) impl_->gpuReconnectDue = now + std::chrono::seconds(3);
-                else if (now >= impl_->gpuReconnectDue) {
-                    impl_->gpuReconnectSession = 0; impl_->gpuReconnectLast = now;
-                    veyra::log::warn("gpu-reconnect", "reconnecting the capture card after the GPU failure");
-                    emit notice(tr("GPU 已重置，正在自动重新连接采集卡"), false);
-                    resumeCaptureSession();
-                }
-            }
         }
         updateGameMode();
     });
