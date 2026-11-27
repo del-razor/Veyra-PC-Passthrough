@@ -1,4 +1,5 @@
 #include "veyra/sink/RecordingAudioTap.h"
+#include "veyra/sink/SystemAudioLoopback.h"
 
 #include <algorithm>
 #include <atomic>
@@ -28,12 +29,15 @@ void addRecordingAudioSink(std::shared_ptr<RecordingAudioSink> sink){
     std::lock_guard lock(gTapMutex);
     if(std::find(gSinks.begin(),gSinks.end(),sink)==gSinks.end())gSinks.push_back(std::move(sink));
     gTapActive.store(true,std::memory_order_release);
+    // OverRez: screen capture has no sound of its own; the system sound feeds the tap.
+    setSystemAudioLoopback(true);
 }
 
 void removeRecordingAudioSink(const RecordingAudioSink* sink){
     std::lock_guard lock(gTapMutex);
     std::erase_if(gSinks,[sink](const auto& s){return s.get()==sink;});
     gTapActive.store(!gSinks.empty(),std::memory_order_release);
+    setSystemAudioLoopback(!gSinks.empty());
 }
 
 bool recordingAudioActive(){return gTapActive.load(std::memory_order_acquire);}

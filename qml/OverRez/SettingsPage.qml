@@ -506,7 +506,7 @@ VPage {
                         objectName: "set-recording"
                         VRow {
                             label: qsTr("录制保存位置")
-                            hint: veyra.recordingDirectory + qsTr("（MP4，录下处理后的画面和正在播放的声音）")
+                            hint: veyra.recordingDirectory + " (MP4: the enhanced picture and your PC's sound)"
                             RowLayout {
                                 spacing: 6
                                 VButton { text: qsTr("打开"); ghost: true; onClicked: veyra.openRecordingDirectory() }
@@ -586,7 +586,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("录制声音")
-                            hint: qsTr("录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入")
+                            hint: "Records what Windows plays on the default output device: the game and anything else you hear."
                             VSwitch {
                                 objectName: "set-recaudio"
                                 checked: veyra.recordingAudio

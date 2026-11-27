@@ -492,6 +492,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/sink/NvencLiveEncoder.cpp
     src/sink/MfVideoEncoder.cpp
     src/sink/RecordingAudioTap.cpp
+    src/sink/SystemAudioLoopback.cpp
     src/sink/VideoEncoderFactory.cpp
   )
   veyra_apply_warnings(veyra_sinks)
