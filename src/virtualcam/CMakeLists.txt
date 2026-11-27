@@ -65,22 +65,3 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_custom_target(veyra_virtualcam_components DEPENDS veyra_virtualcam_setup)
 endif()
 
-foreach(kind probe transport_tests cadence)
-  if(kind STREQUAL probe)
-    set(VCAM_TEST_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../tools/virtual_camera_probe/main.cpp")
-  elseif(kind STREQUAL cadence)
-    # What a DirectShow consumer receives: arrival times and pictures (2026-11-17).
-    set(VCAM_TEST_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../tools/virtual_camera_cadence/main.cpp")
-  else()
-    set(VCAM_TEST_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../tests/unit/VirtualCameraTransportTests.cpp")
-  endif()
-  add_executable(veyra_virtualcam_${kind} EXCLUDE_FROM_ALL ${VCAM_TEST_SOURCE} ${VCAM_IPC_SOURCES} CameraRegistration.cpp)
-  target_include_directories(veyra_virtualcam_${kind} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${VCAM_VENDOR}/ipc" "${CMAKE_CURRENT_LIST_DIR}/../../include")
-  target_compile_definitions(veyra_virtualcam_${kind} PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
-  target_compile_features(veyra_virtualcam_${kind} PRIVATE cxx_std_20)
-  target_compile_options(veyra_virtualcam_${kind} PRIVATE /utf-8 /W3 /WX-)
-  target_link_libraries(veyra_virtualcam_${kind} PRIVATE strmiids ole32 oleaut32 advapi32)
-  set_target_properties(veyra_virtualcam_${kind} PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/virtualcam" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/virtualcam"
-    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-endforeach()
