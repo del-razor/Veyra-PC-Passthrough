@@ -381,10 +381,6 @@ public:
     // Split into read-only and read-write so a reviewer can see at a glance
     // which values the UI can command and which it can only display.
     QString statusText() const;
-    bool timelineSeekable() const;
-    QVariantMap liveTimeshift() const;
-    Q_INVOKABLE double timelineSeconds(double fraction) const;
-    Q_INVOKABLE void returnToLive();
     bool running() const;
     bool paused() const;
     bool failed() const;
@@ -395,9 +391,7 @@ public:
     bool captureEnhancementLoading() const;
     double position() const;
     double duration() const;
-    double progress() const;
     QString positionText() const;
-    QString durationText() const;
 
     QString sourceName() const;
     QString sourceSummary() const;
@@ -435,10 +429,8 @@ public:
     bool muted() const;
     void setMuted(bool value);
     double playbackSpeed() const;
-    double playbackRate() const;
     double minimumPlaybackRate() const;
     double maximumPlaybackRate() const;
-    void setPlaybackRate(double rate);
 
     bool nrEnabled() const;
     int selectedNrLayer() const;
@@ -729,9 +721,6 @@ public:
 
     QVariantList presets() const;
     QString currentPresetName() const;
-    QVariantList audioTracks() const;
-    int selectedAudioTrack() const;
-    void setSelectedAudioTrack(int index);
     QString colorStatus() const;
     QString videoHdrStatus() const;
 
@@ -794,8 +783,6 @@ public:
     Q_INVOKABLE void openAudioDialog();
     Q_INVOKABLE void togglePlayPause();
     Q_INVOKABLE void stopPlayback();
-    Q_INVOKABLE void seekTo(double seconds);
-    Q_INVOKABLE void seekBy(double seconds);
     // V held down: the engine shows the unprocessed frame until release
     // (AppShell holdOriginal -> engine.comparison(1, false)).
     Q_INVOKABLE void holdOriginal(bool held);
@@ -805,7 +792,6 @@ public:
     // Limits a window's pointer input to a rectangle (QWindow::setMask); the
     // fullscreen bar window uses it so only its pill takes the pointer.
     Q_INVOKABLE void setWindowMask(QObject* window, const QRectF& rect);
-    Q_INVOKABLE void stepFrame(int direction);
     Q_INVOKABLE void takeScreenshot();
     // Recording: the 3 second countdown lives in the interface, the engine
     // only opens the file when the request reaches it.

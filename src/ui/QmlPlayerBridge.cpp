@@ -482,15 +482,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         {
             const auto& s = impl_->snapshot;
-            if (impl_->resumeSession && s.sessionId == impl_->resumeSession && s.running && s.duration > 0) {
-                const double at = impl_->resumeAt;
-                impl_->resumeSession = 0;
-                if (at >= 0.5 && at < s.duration - 0.5) {
-                    seekTo(at);
-                    veyra::log::info("ui-resume", std::format("resumed at {:.1f}s", at));
-                    emit notice(tr("已从上次位置 %1 继续").arg(formatTime(at)), false);
-                }
-            }
             if (++impl_->positionTicks >= 120) {
                 impl_->positionTicks = 0; rememberPosition(false);
                 if(s.running&&!s.capture&&!s.image&&s.sourceWidth>=64&&s.sourceHeight>=64&&s.sourceWidth<=3840&&s.sourceHeight<=2160){

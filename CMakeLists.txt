@@ -521,7 +521,6 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   # composes veyra_media; no second decode implementation exists.
   add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_dynamic veyra_shader_hud_lock_fill veyra_shader_hud_lock_compose veyra_shader_hud_protect_motion veyra_shader_hud_protect_detect veyra_shader_hud_protect_repair veyra_shader_hud_protect_flow veyra_shader_hud_protect_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change veyra_shader_rife_pack veyra_shader_rife_unpack veyra_shader_rife_shot_change)
   add_library(veyra_sources STATIC
-    src/source/MediaFileSource.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/VirtualDesktop.cpp
   )
@@ -779,7 +778,7 @@ endif()
   # NR inference reuse against full inference on a real video (offline readbacks).
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/CaptureGraphPreparation.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp src/engine/ReplayBuffer.cpp src/engine/MicrophoneCapture.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/CaptureGraphPreparation.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp src/engine/ReplayBuffer.cpp src/engine/MicrophoneCapture.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)

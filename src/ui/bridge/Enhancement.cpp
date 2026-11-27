@@ -1320,13 +1320,8 @@ void QmlPlayerBridge::setMuted(bool value) {
     emit snapshotChanged();
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
-double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }
 double QmlPlayerBridge::minimumPlaybackRate() const { return engine::kMinPlaybackRate; }
 double QmlPlayerBridge::maximumPlaybackRate() const { return engine::kMaxPlaybackRate; }
-void QmlPlayerBridge::setPlaybackRate(double rate) {
-    if(!impl_->engine.setPlaybackRate(rate))return;
-    impl_->snapshot.playbackRate=rate;emit snapshotChanged();
-}
 
 
 } // namespace veyra::ui

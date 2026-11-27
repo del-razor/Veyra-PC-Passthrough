@@ -453,8 +453,6 @@ VPage {
                         iconName: (veyra.running && !veyra.paused) ? "pause" : "play"
                         onClicked: veyra.togglePlayPause()
                     }
-                    VButton { Layout.row: 0; Layout.column: 2; icon: true; iconName: "back10"; onClicked: veyra.seekBy(-10) }
-                    VButton { Layout.row: 0; Layout.column: 3; icon: true; iconName: "fwd10"; onClicked: veyra.seekBy(10) }
 
                     // .nv-stats: each entry separated by a hairline, mono numbers.
                     Flickable {

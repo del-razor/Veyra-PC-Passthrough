@@ -25,15 +25,6 @@ bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
 bool QmlPlayerBridge::captureEnhancementLoading() const { return impl_->snapshot.captureEnhancementLoading && !impl_->snapshot.failed; }
 double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
 double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
-double QmlPlayerBridge::progress() const {
-    const auto& n=impl_->snapshot.network;
-    if (n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds) {
-        const double span=n.timeshiftEndSeconds-n.timeshiftStartSeconds;
-        return std::clamp((position()-n.timeshiftStartSeconds)/span,0.0,1.0);
-    }
-    const double d = impl_->snapshot.duration;
-    return d > 0.01 ? std::clamp(impl_->snapshot.position / d, 0.0, 1.0) : 0.0;
-}
 QString QmlPlayerBridge::positionText() const {
     const auto& n=impl_->snapshot.network;
     if(n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds) {
@@ -41,29 +32,6 @@ QString QmlPlayerBridge::positionText() const {
         return behind<1 ? tr("直播") : QStringLiteral("−")+mmss(behind);
     }
     return mmss(impl_->snapshot.position);
-}
-QString QmlPlayerBridge::durationText() const {
-    return impl_->snapshot.network.live ? tr("直播") : mmss(impl_->snapshot.duration);
-}
-bool QmlPlayerBridge::timelineSeekable() const {
-    const auto& n=impl_->snapshot.network;
-    return n.live ? n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds : duration()>0&&!isCapture();
-}
-QVariantMap QmlPlayerBridge::liveTimeshift() const {
-    const auto& n=impl_->snapshot.network;
-    return {{"enabled",n.timeshiftEnabled},{"available",n.live&&timelineSeekable()},
-            {"start",n.timeshiftStartSeconds},{"end",n.timeshiftEndSeconds}};
-}
-double QmlPlayerBridge::timelineSeconds(double fraction) const {
-    const auto& n=impl_->snapshot.network;
-    fraction=std::clamp(fraction,0.0,1.0);
-    if(n.timeshiftEnabled)return n.timeshiftStartSeconds+fraction*(n.timeshiftEndSeconds-n.timeshiftStartSeconds);
-    return fraction*duration();
-}
-void QmlPlayerBridge::returnToLive() {
-    if(!impl_->snapshot.network.timeshiftEnabled||!timelineSeekable()) return;
-    seekTo(impl_->snapshot.network.timeshiftEndSeconds);
-    if(paused())togglePlayPause();
 }
 
 // --- source -----------------------------------------------------------------
@@ -262,14 +230,6 @@ void QmlPlayerBridge::stopPlayback() {
     impl_->openingSessionId = 0;
     impl_->engine.stop();
 }
-void QmlPlayerBridge::seekTo(double seconds) {
-    if(!timelineSeekable())return;
-    liveTranslation_->setPlayback(impl_->snapshot.sessionId, false, true);
-    impl_->engine.seek(seconds);
-}
-void QmlPlayerBridge::seekBy(double seconds) {
-    seekTo(std::max(0.0, impl_->snapshot.position + seconds));
-}
 void QmlPlayerBridge::logUi(const QString& channel, const QString& text) {
     const std::string c = channel.toStdString();
     veyra::log::info(c.c_str(), text.toStdString());
@@ -284,12 +244,6 @@ void QmlPlayerBridge::holdOriginal(bool held) {
     if (held) impl_->engine.comparison(1, false);
     else impl_->engine.comparison(impl_->compareMode, impl_->compareBase, float(impl_->compareSplit));
     veyra::log::info("ui-compare", held ? "hold original on" : "hold original off");
-}
-void QmlPlayerBridge::stepFrame(int direction) {
-    // A frame step is a small seek. The engine owns the real frame duration, so
-    // this is honest about being approximate rather than pretending to be exact.
-    if (!direction) return;
-    impl_->engine.seek(std::max(0.0, impl_->snapshot.position + (direction > 0 ? 1.0 / 60.0 : -1.0 / 60.0)));
 }
 
 void QmlPlayerBridge::takeScreenshot() {

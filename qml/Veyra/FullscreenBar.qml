@@ -92,7 +92,6 @@ Window {
     // picture would show through it (field report 2026-10-02).
     readonly property int tipRoom: 56
     readonly property rect hitRect: menuOpen ? Qt.rect(0, 0, width, height)
-                                             : bar.seekPreviewOpen ? Qt.rect(0, menuRoom - 122, width, 214)
                                              : bar.hovered ? Qt.rect(0, menuRoom - tipRoom, width, 92 + tipRoom)
                                              : Qt.rect(0, menuRoom, width, 92)
     onHitRectChanged: veyra.setWindowMask(win, hitRect)

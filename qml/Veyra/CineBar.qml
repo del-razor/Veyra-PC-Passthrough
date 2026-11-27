@@ -29,11 +29,8 @@ Rectangle {
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool compact: width < 820
-    readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
-    // Keep the control window active until a seek releases its mouse grab, too.
-    // Returning focus to the owner during scrubbing cancels the MouseArea press.
-    readonly property bool interacting: seekArea.scrubbing || volumeSlider.pressed || editing
+    readonly property bool interacting: volumeSlider.pressed || editing
     function finishEditing() { volumeSlider.closeEditor(true) }
     HoverHandler { id: barHover }
     // Buttons, the seek rail and the volume slider take their own presses first; only
@@ -141,7 +138,6 @@ Rectangle {
 
                 // 载入: screen capture without leaving 极简.
                 CBtn { objectName: "cine-load"; glyph: "monitor"; tip: qsTr("屏幕捕获"); onTapped: veyra.openScreenCaptureDialog() }
-                CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                 // .play: 40px white circle with the play/pause glyph.
                 Item {
@@ -164,7 +160,6 @@ Rectangle {
                     TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
                 }
 
-                CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
                 CBtn {
                     objectName: "cine-audio-tracks"
                     glyph: audioMenu.captureSource ? "vol" : "music"
@@ -174,223 +169,6 @@ Rectangle {
                 }
             }
 
-            // .seekrow: mono times either side of the rail.
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-                Text {
-                    text: veyra.positionText
-                    color: Theme.t3
-                    font.family: Theme.fontMono
-                    font.pixelSize: 10
-                }
-                Item {
-                    id: seekArea
-                    objectName: "cine-seek"
-                    Layout.fillWidth: true
-                    implicitHeight: 14
-                    property bool scrubbing: false
-                    property real scrubFrac: 0
-                    // .seek:hover .thumb { left: 44% } - the thumb tracks the real
-                    // progress, not the design's hard-coded 44%.
-                    readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, shownProgress))
-                    // Twice a second, not every snapshot: the pill is its own window and a rail
-                    // that moved every tick made it present ~50 times a second, more often than
-                    // a film plays, so OBS game capture could lock onto the pill.
-                    property real shownProgress: veyra.progress
-                    // Where the last scrub seek was sent, so a release that lands on
-                    // the same spot does not interrupt it with a duplicate.
-                    property real lastSeekTarget: -1
-                    Timer {
-                        interval: 500; repeat: true; running: bar.visible
-                        onTriggered: seekArea.shownProgress = veyra.progress
-                    }
-                    readonly property real hoverFrac: scrubbing ? scrubFrac
-                                                      : seekMouse.containsMouse && seekArea.width > 0
-                                                        ? Math.max(0, Math.min(1, seekMouse.mouseX / seekArea.width))
-                                                        : frac
-                    property int thumbnailBucket: -1
-                    function fractionAt(x) {
-                        return seekArea.width > 0 ? Math.max(0, Math.min(1, x / seekArea.width)) : 0
-                    }
-                    Timer {
-                        id: scrubSeek
-                        // Restarted on every pointer move (see the MouseArea below), so it
-                        // fires only once the drag settles. Seeking mid-drag makes two
-                        // seeks overlap and they interrupt each other: a network source
-                        // re-opens its read on each one, which is what made a drag look
-                        // like a freeze. newBV defers the same way (1 s there).
-                        interval: 250
-                        onTriggered: {
-                            if (!seekArea.scrubbing) return
-                            const target = veyra.timelineSeconds(seekArea.scrubFrac)
-                            seekArea.lastSeekTarget = target
-                            veyra.seekTo(target)
-                        }
-                    }
-                    Timer {
-                        id: thumbnailDelay
-                        interval: 120
-                        onTriggered: seekArea.thumbnailBucket = -1
-                    }
-                    Rectangle {
-                        id: rail
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width
-                        height: seekMouse.containsMouse ? 6 : 3
-                        radius: 9
-                        color: Qt.rgba(1, 1, 1, 0.14)
-                        Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
-                        // White; the sunset gradient along the rail in the dusk palette.
-                        Rectangle {
-                            width: parent.width * seekArea.frac
-                            height: parent.height
-                            radius: 9
-                            color: "#FFFFFF"
-                            visible: !Theme.accentGradient
-                        }
-                        VAccentFill {
-                            width: parent.width * seekArea.frac
-                            height: parent.height
-                            radius: 9
-                            farEnd: true
-                            span: parent.width
-                            visible: Theme.accentGradient
-                        }
-                    }
-                    // .seek .thumb: 11px dot, scale 0 -> 1 over .4s --spring on hover.
-                    Rectangle {
-                        width: 11; height: 11; radius: 5.5
-                        color: "#FFFFFF"
-                        x: seekArea.frac * seekArea.width - width / 2
-                        anchors.verticalCenter: parent.verticalCenter
-                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
-                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
-                    }
-                    // .seek .peek: 144x104 above the rail, opacity .15s, scale .85 -> 1
-                    // over .4s --spring from its bottom centre.
-                    Rectangle {
-                        visible: opacity > 0.01
-                        width: veyra.liveTimeshift.available ? 84 : 144
-                        height: veyra.liveTimeshift.available ? 26 : 104
-                        radius: 8
-                        color: "#000000"
-                        border.width: 1
-                        border.color: Theme.stroke2
-                        x: Math.max(0, Math.min(parent.width - width,
-                                                seekArea.hoverFrac * seekArea.width - width / 2))
-                        y: -height - 18
-                        opacity: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0
-                        scale: seekMouse.containsMouse || seekArea.scrubbing ? 1 : 0.85
-                        transformOrigin: Item.Bottom
-                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
-                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
-                        Image {
-                            id: previewFrame
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.top: parent.top
-                            height: 81
-                            asynchronous: true
-                            cache: true
-                            fillMode: Image.PreserveAspectFit
-                            source: ""
-                        }
-                        Text {
-                            anchors.centerIn: previewFrame
-                            visible: previewFrame.status === Image.Loading || previewFrame.status === Image.Error
-                            text: previewFrame.status === Image.Loading ? qsTr("加载中") : qsTr("预览不可用")
-                            color: Theme.t3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 11
-                        }
-                        Text {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            height: 23
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
-                            text: veyra.liveTimeshift.enabled
-                                  ? "−" + veyra.formatTime(veyra.liveTimeshift.end - veyra.timelineSeconds(seekArea.hoverFrac))
-                                  : veyra.formatTime(veyra.timelineSeconds(seekArea.hoverFrac))
-                            color: Theme.t1
-                            font.family: Theme.fontMono
-                            font.pixelSize: 11
-                            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
-                            Rectangle {
-                                anchors.fill: parent
-                                z: -1
-                                color: "#111111"
-                            }
-                        }
-                    }
-                    MouseArea {
-                        id: seekMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        preventStealing: true
-                        enabled: veyra.timelineSeekable
-                        onEnabledChanged: if (!enabled && seekArea.scrubbing) {
-                            scrubSeek.stop()
-                            seekArea.scrubbing = false
-                        }
-                        cursorShape: Qt.PointingHandCursor
-                        onEntered: thumbnailDelay.restart()
-                        onExited: {
-                            thumbnailDelay.stop()
-                            seekArea.thumbnailBucket = -1
-                        }
-                        onPressed: mouse => {
-                            seekArea.lastSeekTarget = -1
-                            seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
-                            seekArea.scrubbing = true
-                        }
-                        onPositionChanged: mouse => {
-                            if (seekArea.scrubbing) {
-                                seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
-                                // restart(), not start(): each move pushes the deadline
-                                // back, so the seek waits for the pointer to settle.
-                                scrubSeek.restart()
-                            }
-                            thumbnailDelay.restart()
-                        }
-                        onReleased: mouse => {
-                            const target = veyra.timelineSeconds(seekArea.fractionAt(mouse.x))
-                            scrubSeek.stop()
-                            seekArea.shownProgress = seekArea.fractionAt(mouse.x)
-                            seekArea.scrubbing = false
-                            veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
-                            // The timer may have fired on the last move and already
-                            // started a seek to (very nearly) this position. A second
-                            // request would interrupt that one and cost another full
-                            // re-position, so a near-identical target is dropped.
-                            if (Math.abs(target - seekArea.lastSeekTarget) > 0.5) {
-                                seekArea.lastSeekTarget = target
-                                veyra.seekTo(target)
-                            }
-                        }
-                        onCanceled: {
-                            scrubSeek.stop()
-                            seekArea.scrubbing = false
-                        }
-                    }
-                }
-                Text {
-                    text: veyra.durationText
-                    visible: !veyra.liveTimeshift.available
-                    color: Theme.t3
-                    font.family: Theme.fontMono
-                    font.pixelSize: 10
-                }
-                VButton {
-                    objectName: "cine-return-live"
-                    visible: veyra.liveTimeshift.available
-                    ghost: true
-                    text: qsTr("回到直播")
-                    onClicked: veyra.returnToLive()
-                }
-            }
         }
 
         // --- right: preset, volume, picture and bar controls ----------

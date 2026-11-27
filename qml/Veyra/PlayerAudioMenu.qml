@@ -21,12 +21,7 @@ VMenu {
                 { sep: true }, settings
             ]
         }
-        const tracks = backend.audioTracks
-        if (tracks.length === 0)
-            return [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
-        return tracks.map(t => ({ label: t.label, index: t.index,
-            note: t.channels > 0 ? t.channels + qsTr(" 声道") : "",
-            checked: t.index === backend.selectedAudioTrack })).concat([{ sep: true }, settings])
+        return [settings]
     }
 
     onPicked: (index, item) => {
@@ -35,8 +30,6 @@ VMenu {
             settingsRequested()
         } else if (item.act === "monitor") {
             if (captureSource) backend.setPreference("captureAudioMonitor", item.enabledValue)
-        } else if (item.index !== undefined) {
-            backend.selectedAudioTrack = item.index
         }
     }
 }

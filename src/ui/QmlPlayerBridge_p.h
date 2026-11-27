@@ -352,9 +352,6 @@ struct QmlPlayerBridge::Impl {
         QString window;
     } lastShortcutKey;
     int positionTicks = 0;
-    // A reopened file resumes here once its session is running.
-    uint64_t resumeSession = 0;
-    double resumeAt = 0;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     int uiDeviceGeneration = 0;   // interface scene graphs recreated after a lost device
     // Settings → 组件与许可. Read once and on refreshComponentList(): the property used to

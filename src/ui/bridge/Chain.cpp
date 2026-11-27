@@ -315,27 +315,6 @@ QString QmlPlayerBridge::currentPresetName() const {
     return tr("自定义");
 }
 
-QVariantList QmlPlayerBridge::audioTracks() const {
-    QVariantList out;
-    for (const auto& track : impl_->snapshot.audioTracks) {
-        // The track struct carries raw fields; the UI shows the ones that are
-        // actually present rather than a synthesized name.
-        QStringList parts;
-        if (!track.language.empty()) parts << utf8Of(track.language);
-        if (!track.title.empty()) parts << utf8Of(track.title);
-        if (!track.codec.empty()) parts << utf8Of(track.codec);
-        QVariantMap item;
-        item["index"] = track.streamIndex;
-        item["label"] = parts.isEmpty() ? tr("音轨 %1").arg(track.streamIndex) : parts.join(QStringLiteral(" · "));
-        item["channels"] = int(track.channels);
-        out << item;
-    }
-    return out;
-}
-int QmlPlayerBridge::selectedAudioTrack() const { return impl_->snapshot.selectedAudioTrack; }
-void QmlPlayerBridge::setSelectedAudioTrack(int index) {
-    impl_->engine.selectAudioTrack(impl_->snapshot.sessionId, index);
-}
 
 
 

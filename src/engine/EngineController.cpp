@@ -30,7 +30,6 @@
 #include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/engine/AdaptiveFgMultiplier.h"
 #include "veyra/engine/FramePacingRepair.h"
-#include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureMetrics.h"
 #include "veyra/source/ScreenCaptureSource.h"
 #include "veyra/pipeline/CaptureUploadFrame.h"
@@ -53,7 +52,6 @@
 #include "veyra/engine/PreviewGpuSession.h"
 #include "CaptureGraphPreparation.h"
 #include "veyra/engine/EffectChain.h"
-#include "veyra/engine/PosterFrame.h"
 #include <avrt.h>
 #include <chrono>
 #include <filesystem>
@@ -165,16 +163,6 @@ void EngineController::setEnhancementPrewarmEnabled(bool enabled){
     if(!enabled){std::lock_guard lock(mutex_);if(!busy_&&!pending_)pending_=[this]{prewarmed_.reset();log::info("prewarm","event=disabled released=true");};}
     wake_.notify_one();
 }
-bool EngineController::setPlaybackRate(double rate){
-    if(!validPlaybackRate(rate))return false;
-    std::lock_guard lock(mutex_);
-    if(!snapshot_.running||snapshot_.capture||snapshot_.image)return false;
-    if(requestedPlaybackRate_==rate)return true;
-    requestedPlaybackRate_=rate;snapshot_.playbackRate=rate;
-    if(seekSeconds_<0){snapshot_.seekTarget=snapshot_.position;++snapshot_.seekRequested;seekSeconds_=snapshot_.position;}
-    veyra::log::info("playback-rate",std::format("requested {:.2f}x at {:.3f}s",rate,snapshot_.position));
-    return true;
-}
 void EngineController::setFullscreenMemoryProtection(bool enabled){
     fullscreenMemoryProtection_=enabled;
     if(!enabled){std::lock_guard lock(mutex_);snapshot_.vramFullscreenUnsafe=false;}
@@ -190,7 +178,7 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // below would drop it: the DASH audio address is the difference between a Bilibili
     // video that has sound and one that is silent.
     const std::wstring audioPath=opts.audioPath;
-    {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
+    {std::lock_guard lock(mutex_);snapshot_={};activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
     opts.softwareDecode=softwareDecode;opts.hardwareDecodeOnly=hardwareDecodeOnly;
@@ -209,12 +197,6 @@ void EngineController::setVolume(float gain,bool mute){if(!std::isfinite(gain))r
 void EngineController::setCaptureAudioMonitoring(bool enabled){
     if(captureAudioMonitoring_.exchange(enabled)!=enabled)
         log::info("capture-audio-monitor",std::format("enabled={} recordingBeforeGain=1 inputUnchanged=1",enabled));
-}
-bool EngineController::selectAudioTrack(uint64_t session,int streamIndex){
-    std::lock_guard lock(mutex_);
-    if(session!=snapshot_.sessionId||!snapshot_.running||snapshot_.failed||snapshot_.capture||snapshot_.image)return false;
-    if(std::none_of(snapshot_.audioTracks.begin(),snapshot_.audioTracks.end(),[&](const auto& t){return t.streamIndex==streamIndex;}))return false;
-    pendingAudioSession_=session;pendingAudioTrack_=streamIndex;return true;
 }
 bool EngineController::requestSettings(EnhancementSettings s,std::optional<ChainRuntimeOrder> order,uint64_t* acceptedRevision){
     if(!s.validate().empty()){veyra::log::warn("settings","invalid whole settings transaction rejected");status(L"整套设置无效，未应用任何字段",false);return false;}
@@ -361,7 +343,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
     // started; a different compute GPU choice opens a new one.
     if(prewarmed_&&prewarmed_->context.initialized()&&gfx::preferredAdapterLuid()&&prewarmed_->context.adapter().luid!=gfx::preferredAdapterLuid())prewarmed_.reset();
     auto gpu=prewarmed_?std::move(prewarmed_):std::make_unique<PreviewGpuSession>();
-    auto& ctx=gpu->context;auto& ring=gpu->ring;source::MediaFileSource source;
+    auto& ctx=gpu->context;auto& ring=gpu->ring;
     // A GPU hang is reported before Windows resets the GPU (field logs: 13 s later). DRED can
     // only name the stopped command list after the removal, so teardown checks once more.
     bool gpuFailureAwaitingRemoval=false;
@@ -374,7 +356,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
     CaptureGraphPreparation capturePreparation;
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
-    AVFrame* imageFrame=nullptr;AVFrame* cachedFrame=nullptr;pipeline::FramePacket cachedPacket;
+    AVFrame* cachedFrame=nullptr;pipeline::FramePacket cachedPacket;
     const bool physicalCapture=false;
     source::ScreenCaptureSource screenSource;const bool isScreen=path.starts_with(L"screen:");
     // Set when a live parameter change arrives while paused (or on a still
@@ -392,8 +374,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
     const bool testReplayAsCard=options.captureReplayForTest&&GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_AS_CARD",nullptr,0)>0;
     const bool cardTiming=physicalCapture||testReplayAsCard;
     const bool pairAnchoredLive=physicalCapture||isStream||isScreen||testReplayAsCard;
-    source::IFrameSource* activeSource=&source;
-    if(isScreen)activeSource=&screenSource;
+    source::IFrameSource* activeSource=&screenSource;
     if(options.captureReplayForTest)veyra::log::info("capture-test","file replay exercises live scheduler; no physical capture device or latency measurement");
     bool audioStarted=false;bool failed=false;
     try {
@@ -404,28 +385,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
             wchar_t testSlots[16]{};unsigned commandSlots=16;
             if(GetEnvironmentVariableW(L"VEYRA_TEST_COMMAND_SLOTS",testSlots,16))commandSlots=std::clamp(unsigned(_wtoi(testSlots)),6u,24u);
             if(!gpu->initialize(commandSlots)){status(L"D3D12初始化失败，请查看诊断",true);break;}
-            auto ext=std::filesystem::path(path).extension().wstring();for(auto& c:ext)c=towlower(c);
-            const bool isImage=!media::networkMediaInput(path)&&(ext==L".png"||ext==L".jpg"||ext==L".jpeg");
-            sink::RgbaImage image;
+            if(!isScreen){status(L"Only screen capture is supported",true);break;}
+            const bool isImage=false;
             uint32_t width=0,height=0;double duration=0;
-            if(isImage){
-                if(!sink::loadImage(path,image)){status(L"无法解码PNG/JPEG",true);break;}
-                if(!pipeline::Extent{image.width,image.height}.valid()||uint64_t(image.width)*image.height>16777216){
-                    if(options.nodeOrder){
-                        veyra::log::warn("node-order","large-image tiling has no runtime node-order transport; request rejected");
-                        status(L"节点模式尚未接入大图分块处理，请切换列表模式后打开",true);break;
-                    }
-                    runLargeImage(window,image,options,ctx,ring);break;
-                }
-                imageFrame=av_frame_alloc();imageFrame->format=AV_PIX_FMT_RGBA;imageFrame->width=image.width;imageFrame->height=image.height;imageFrame->pts=0;imageFrame->color_range=AVCOL_RANGE_JPEG;imageFrame->colorspace=AVCOL_SPC_RGB;imageFrame->color_trc=AVCOL_TRC_IEC61966_2_1;
-                if(av_frame_get_buffer(imageFrame,32)<0){status(L"图片资源分配失败",true);break;}
-                for(unsigned y=0;y<image.height;++y)memcpy(imageFrame->data[0]+size_t(y)*imageFrame->linesize[0],image.pixels.data()+size_t(y)*image.width*4,size_t(image.width)*4);
-                width=image.width;height=image.height;options.fg=false;
-                {std::lock_guard lock(mutex_);desired_.multiplier=1;snapshot_.image=true;snapshot_.desired=desired_;
-                 snapshot_.sourceWidth=image.width;snapshot_.sourceHeight=image.height;
-                 snapshot_.sourceDisplayAspect=image.height>0?double(image.width)/image.height:0.0;
-                 snapshot_.sourceRotationDegrees=0;}
-            }else{
+            {
                 source::SourceOpenDesc od;od.path=path;
                 od.cancelled=&stop_;
                 od.deinterlace=options.deinterlace;
@@ -474,39 +437,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                         e.what(),od.networkHeaders.size(),od.audioPath.size()));
                     sourceOpened=false;
                 }
-                if(!isMoonlight&&!isXbox&&!sourceOpened){status(isScreen?screenSource.status():!isCapture&&!source.errorMessage().empty()?source.errorMessage():L"无法打开视频，请查看诊断",true);break;}
+                if(!isMoonlight&&!isXbox&&!sourceOpened){status(isScreen?screenSource.status():L"无法打开视频，请查看诊断",true);break;}
                 // A file's actual decoded pixel format and HDR VUI are only
                 // reliable on AVFrame. Prime one frame before constructing
                 // the graph so AV1/MOV 10-bit and HDR inputs do not get an
                 // SDR graph by mistake. The cloned frame is consumed by the
                 // normal owner-thread loop below, preserving its PTS.
-                if(!isCapture){
-                    pipeline::FramePacket firstPacket;const AVFrame* firstFrame=nullptr;
-                    auto firstStatus=activeSource->read(firstPacket,&firstFrame);
-                    // A network source collects its start-up buffer before the first picture; show the
-                    // progress instead of an empty window, and let the user stop at any time.
-                    {
-                        auto nextShown=Clock::now();
-                        while(firstStatus==source::SourceReadStatus::Waiting&&!stop_){
-                            if(Clock::now()>=nextShown){
-                                nextShown=Clock::now()+std::chrono::milliseconds(150);
-                                const auto stats=source.networkStats();
-                                {std::lock_guard lock(mutex_);snapshot_.network=stats;}
-                                if(!stats.message.empty())status(stats.message);
-                            }
-                            firstStatus=activeSource->read(firstPacket,&firstFrame);
-                        }
-                        if(stop_)break;
-                    }
-                    if(firstStatus!=source::SourceReadStatus::Frame||firstFrame==nullptr||firstPacket.pts.isUnknown()){
-                        status(activeSource->info().kind==pipeline::SourceKind::File&&source.errorMessage().empty()
-                            ?L"视频首帧无法解码或没有有效时间戳，请查看诊断":source.errorMessage().empty()?L"视频首帧读取失败":source.errorMessage(),true);
-                        break;
-                    }
-                    cachedFrame=av_frame_clone(firstFrame);
-                    if(!cachedFrame){status(L"视频首帧缓存失败",true);break;}
-                    cachedPacket=firstPacket;
-                }
                 width=activeSource->info().width;height=activeSource->info().height;duration=isCapture?0:activeSource->info().duration.toDouble();
                 {std::lock_guard lock(mutex_);
                  const auto& si=activeSource->info();
@@ -515,14 +451,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                  previewView_.rotationDegrees=si.rotationDegrees;
                  if(si.width&&si.height&&std::isfinite(si.displayAspect)&&si.displayAspect>0&&std::abs(si.displayAspect-double(si.width)/si.height)>.001)
                      previewView_.displayAspect=si.displayAspect;
-                 snapshot_.sourceRotationDegrees=si.rotationDegrees;
-                 // Poster for the minimal-mode bar. Built once, from the frame
-                 // we already decoded; failure leaves it empty on purpose.
-                 std::vector<uint8_t> poster;uint32_t pw=0,ph=0;
-                 const AVFrame* posterSource=cachedFrame?cachedFrame:imageFrame;
-                 if(posterSource&&makePosterFrame(posterSource,320,180,poster,pw,ph)){
-                     snapshot_.posterRgba=std::move(poster);snapshot_.posterWidth=pw;snapshot_.posterHeight=ph;
-                 }else{snapshot_.posterRgba.clear();snapshot_.posterWidth=snapshot_.posterHeight=0;}}
+                 snapshot_.sourceRotationDegrees=si.rotationDegrees;}
                 {std::lock_guard lock(mutex_);snapshot_.sourceNotice=activeSource->info().dolbyVision.description();
                  const auto& si=activeSource->info();if(si.deinterlaced)snapshot_.sourceNotice+=std::format(L"{}去隔行：{} · {:.3f}i → {:.3f}p",snapshot_.sourceNotice.empty()?L"":L" · ",si.deinterlacePath=="d3d12-video-processor"?L"GPU":L"兼容软解",si.averageFps*0.5,si.averageFps);}
             }
@@ -881,37 +810,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
             uint64_t seekDecoded=0;
             bool fileAwaitingVideo=true,fileAudioAlignPending=true,fileInputEnded=false;double lastFilePresentedMs=0,lastFilePresentLateness=0;
             TimingWindow presentEntryDeviation,presentReturnDeviation;
-            // Network sources and files on a server share ONE connection between picture and sound:
-            // the audio pipeline reads the same demux session instead of opening the address again.
-            const auto demuxSession=isImage||isCapture?std::shared_ptr<media::DemuxSession>{}:source.sharedSession();
-            // A DASH source (Bilibili) has no audio in its video container: the audio
-            // arrives as its own address, so that address wins over the shared video
-            // session, which carries no audio stream at all.
-            const bool separateAudio=!options.audioPath.empty();
-            const std::wstring audioTarget=separateAudio?options.audioPath:path;
-            // Opening the audio address runs FFmpeg's demuxer, which can throw. Without
-            // this guard a failure there escapes into the engine's outer catch and ends
-            // the whole session, which is exactly what "bad allocation" was reporting.
-            bool audioOpened=false;
-            try{
-                // The DASH audio address needs the same Referer/UA the video one uses.
-                audioOpened=!isImage&&!isCapture&&((demuxSession&&!separateAudio)
-                    ?audioPipe.open(demuxSession)
-                    :audioPipe.open(audioTarget,&stop_,options.network.requestHeaders,options.network.userAgent));
-            }catch(const std::exception& e){
-                veyra::log::error("audio",std::format("open failed: {} (separateAudio={} targetLen={})",
-                                                      e.what(),separateAudio?1:0,audioTarget.size()));
-                audioOpened=false;
-            }
-            if(audioOpened){
-                {std::lock_guard lock(mutex_);snapshot_.audioTracks=audioPipe.tracks();snapshot_.selectedAudioTrack=audioPipe.selectedTrack();}
-                audioPipe.holdForVideo();audioPipe.startThread(&audio,true);audioStarted=true;
-                std::lock_guard lock(mutex_);snapshot_.audioAvailable=true;
-                veyra::log::info("audio",std::format("pipeline started separateAudio={} tracks={}",separateAudio?1:0,audioPipe.tracks().size()));
-            }else if(demuxSession){
-                demuxSession->selectAudioStream(-1);   // nobody reads audio: stop queueing it
-                veyra::log::info("net-session","no audio pipeline for this source; audio packets are dropped");
-            }
             auto holdFileAudio=[&]{if(audioStarted)audioPipe.holdForVideo();fileAwaitingVideo=true;fileInputEnded=false;};
             TimingWindow captureAges,scheduleWaits,processTimes,presentTimes,decodeTimes,gpuReadyTimes;
             std::array<TimingWindow,size_t(diagnostics::GpuStage::Count)> gpuStageTimes;
@@ -1493,185 +1391,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                 }
                 return lastAudioClockMs;
             };
-            // Network sources and files on a server: statistics for the signal panel, and the buffering /
-            // reconnect explanation on the status line while playback is held. The previous status comes
-            // back when the hold ends, unless something else replaced the text in the meantime.
-            std::wstring networkSavedStatus,networkShownStatus;
-            bool networkClockFrozen=false;double networkFrozenMs=0;
-            auto nextNetworkPublish=Clock::now();
-            auto publishNetwork=[&]{
-                const auto stats=source.networkStats();
-                std::lock_guard lock(mutex_);
-                snapshot_.network=stats;
-                const bool explain=!stats.message.empty()&&(stats.holding()||stats.state==media::NetworkStats::State::Reconnecting);
-                if(explain){
-                    if(networkShownStatus.empty())networkSavedStatus=snapshot_.status;
-                    snapshot_.status=networkShownStatus=stats.message;
-                }else if(!networkShownStatus.empty()){
-                    if(snapshot_.status==networkShownStatus)snapshot_.status=networkSavedStatus;
-                    networkShownStatus.clear();
-                }
-            };
-            // Runs every loop turn and inside the presentation back-pressure wait: while playback is held
-            // for buffering the frozen clock keeps queued pictures from presenting, and that wait must
-            // neither look like a hang to the watchdog nor stop the statistics.
-            // P0 缓冲闸门：视频侧的水位由 demux 的 phase 给出，音频侧没有对应信号 ——
-            // B 站那种音轨单独打开（session_ 为空）的来源掉数据时，demux 一无所知，
-            // 于是画面照跑、声音断了。这里用音频自己的两个水位把它补上：PCM 缓冲见底，
-            // 或者预读队列见底。阈值带滞回（300→1000、500→1500），否则会在阈值附近
-            // 一秒钟抖好几次，声音断断续续。
-            // P0 buffering gate: the video side reports through the demux phase, the audio
-            // side has no such signal - for a separately opened track (Bilibili) the demux
-            // knows nothing when the sound runs dry, so the picture kept going in silence.
-            // Two audio water levels fill that gap, with hysteresis so it cannot flap.
-            // P2：阈值从环境变量读，现场按网络情况调，不必重新编译。
-            // P2: thresholds come from the environment so a field can be tuned without
-            // rebuilding; anything unset or <= 0 falls back to the built-in value.
-            auto gateEnvMs=[](const char* name,double fallback){
-                const char* value=std::getenv(name);
-                if(!value||!*value)return fallback;
-                const double parsed=std::atof(value);
-                return parsed>0.0?parsed:fallback;
-            };
-            engine::BufferingGateLimits gateLimits;
-            gateLimits.enterPcmMs=gateEnvMs("VEYRA_GATE_ENTER_PCM_MS",gateLimits.enterPcmMs);
-            gateLimits.enterQueuedMs=gateEnvMs("VEYRA_GATE_ENTER_QUEUED_MS",gateLimits.enterQueuedMs);
-            gateLimits.exitPcmMs=gateEnvMs("VEYRA_GATE_EXIT_PCM_MS",gateLimits.exitPcmMs);
-            gateLimits.exitQueuedMs=gateEnvMs("VEYRA_GATE_EXIT_QUEUED_MS",gateLimits.exitQueuedMs);
-            gateLimits.warmupMs=static_cast<long long>(gateEnvMs("VEYRA_GATE_WARMUP_MS",static_cast<double>(gateLimits.warmupMs)));
-            // 判定在 BufferingGate 里，有单元测试兜着（tests/unit/BufferingGateTests.cpp）：
-            // 阈值滞回、5 秒窗口、重连预算、放弃。
-            // The decision lives in BufferingGate, covered by unit tests: the hysteresis,
-            // the 5 s window, the reconnect budget and giving up.
-            engine::BufferingGate bufferingGate(gateLimits);
-            auto gateNow=[]{
-                return std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch()).count();
-            };
-            bool audioGateNotified=false,audioGateWasHolding=false;
-            Clock::time_point nextGateLog{};
-            auto networkTick=[&]{
-                if(!demuxSession)return;
-                const bool videoHolding=demuxSession->holding();
-                long long gateNowMs=0;
-                // A shared demux session already gates both tracks. Its audio has
-                // no independent read-ahead queue, so queuedMs() is always zero.
-                if(audioStarted&&separateAudio){
-                    const double pcmMs=audioPipe.bufferedMs();
-                    const double queuedMs=audioPipe.queuedMs();
-                    // 流已经读到结尾时水位自然会掉到 0 —— 那不是断流。当成断流会做一次毫无
-                    // 意义的重连（地址已经播完），重连失败又把会话标成 failed，B 站层据此
-                    // 「换镜像重开」，表现就是播完之后重新缓冲、又把最后几秒重播一遍。
-                    // A finished stream drains its queue: that is not dryness. Treating it as
-                    // such fired a pointless reconnect, marked the session failed, and made the
-                    // Bilibili layer reopen on another mirror - replaying the last few seconds.
-                    const bool streamEnded = audioPipe.decodingComplete() || audioPipe.clockExhausted() ||
-                                             (demuxSession && demuxSession->eof());
-                    gateNowMs=gateNow();
-                    const auto gateAction=bufferingGate.update(!streamEnded,pcmMs,queuedMs,gateNowMs);
-                    const bool gateHolding=bufferingGate.holding();
-                    if(gateHolding&&!audioGateWasHolding)
-                        veyra::log::warn("buffering-gate",std::format(
-                            "audio running dry: pcmMs={:.0f} queuedMs={:.0f}; holding the picture with the sound",
-                            pcmMs,queuedMs));
-                    else if(!gateHolding&&audioGateWasHolding)
-                        veyra::log::info("buffering-gate",std::format(
-                            "audio recovered: pcmMs={:.0f} queuedMs={:.0f}",pcmMs,queuedMs));
-                    audioGateWasHolding=gateHolding;
-                    // P1：5 秒还没回来就不是「慢」，是连接死了。用原地址重开一次（B 站音频
-                    // 地址在播放期内仍有效），从当前媒体时刻接上。刻意让**音频**当基准：
-                    // 画面为此微跳一帧，好过让口型一直漂。
-                    // P1: five seconds means the connection is dead, not slow. Reopen the same
-                    // audio address and continue from the current media time. The sound stays
-                    // the reference on purpose - the picture takes one small step instead of
-                    // drifting out of sync.
-                    if(gateAction==engine::BufferingGate::Action::Reconnect){
-                        const double resumeMs=lastAudioClockMs;
-                        veyra::log::warn("buffering-gate",std::format(
-                            "reopening the audio address (attempt {}) at {:.0f} ms",bufferingGate.reconnects(),resumeMs));
-                        audioPipe.stopThread();
-                        bool reopened=false;
-                        try{
-                            reopened=audioPipe.open(audioTarget,&stop_,options.network.requestHeaders,options.network.userAgent);
-                        }catch(const std::exception& e){
-                            veyra::log::error("buffering-gate",std::format("audio reopen threw: {}",e.what()));
-                        }
-                        if(reopened){
-                            audioPipe.holdForVideo();audioPipe.startThread(&audio,true);
-                            {
-                                std::lock_guard lock(mutex_);
-                                snapshot_.audioTracks=audioPipe.tracks();
-                                snapshot_.selectedAudioTrack=audioPipe.selectedTrack();
-                                snapshot_.audioAvailable=true;
-                            }
-                            if(std::isfinite(resumeMs)&&resumeMs>0.0)(void)audioPipe.requestSeek(resumeMs);
-                            audioGateWasHolding=false;
-                            watchdog_->beat();
-                            veyra::log::info("buffering-gate",std::format(
-                                "audio reopened; continuing at {:.0f} ms (the picture follows the sound)",resumeMs));
-                        }else{
-                            veyra::log::error("buffering-gate","audio address could not be reopened");
-                            // 重连也失败：这次会话没有可用的声音了。把音频从时钟与闸门里摘掉，
-                            // 否则水位恒为 0，闸门会永远保持，用户点播放只看到冻结的画面。
-                            // Reopening failed too: this session has no usable sound left. Take the
-                            // audio out of the clock and the gate, or a zero water level holds the
-                            // picture for ever and pressing play changes nothing.
-                            audioStarted=false;
-                            bufferingGate.abandon();
-                            {
-                                std::lock_guard lock(mutex_);
-                                snapshot_.audioAvailable=false;   // 界面上也不要再声称有声音
-                            }
-                        }
-                    }
-                }
-                const bool holding=videoHolding||bufferingGate.holding();
-                networkHolding.store(holding);
-                // P2：每秒把两路水位和判定结果写一行，掉一次缓冲也能从日志还原现场。
-                // P2: one line a second with both water levels and the verdict, so a single
-                // buffering episode can be reconstructed from the log alone.
-                if(Clock::now()>=nextGateLog){
-                    // 五秒一条：既能在掉一次缓冲时还原现场，又不会把日志撑爆
-                    // （每秒一条意味着看两小时片子多出七千行）。
-                    // One line every five seconds: enough to reconstruct an episode,
-                    // few enough not to flood a two-hour session.
-                    nextGateLog=Clock::now()+std::chrono::seconds(5);
-                    veyra::log::info("buffering-gate",std::format(
-                        "pcmMs={:.0f} queuedMs={:.0f} videoHolding={} audioHolding={} holding={} reconnects={}",
-                        audioStarted?audioPipe.bufferedMs():-1.0,
-                        audioStarted?audioPipe.queuedMs():-1.0,
-                        videoHolding,bufferingGate.holding(),holding,bufferingGate.reconnects()));
-                }
-                // B 站那种「音轨单独打开」的来源，音频管道看不到视频会话的阶段，
-                // 必须由这里把缓冲状态推过去：否则画面因缓冲停住、声音继续播。
-                // For a source whose audio is opened separately (Bilibili) the pipeline
-                // cannot see the video session's phase, so the buffering state is pushed
-                // here - otherwise the picture stalls while the sound keeps going.
-                // 半秒防抖后再停声音（见上面 audioHoldSince 的说明）。
-                // Half a second of debounce before the sound is actually stopped.
-                if(holding){
-                    if(audioHoldSince==Clock::time_point{})audioHoldSince=Clock::now();
-                    if(!audioHoldPushed&&Clock::now()-audioHoldSince>std::chrono::milliseconds(500)){
-                        audioPipe.setNetworkHold(true);
-                        audioHoldPushed=true;
-                    }
-                }else{
-                    audioHoldSince=Clock::time_point{};
-                    if(audioHoldPushed){audioPipe.setNetworkHold(false);audioHoldPushed=false;}
-                }
-                if(holding)watchdog_->beat();
-                // Without an audio device the media clock is the wall clock: stand it still while the
-                // session pauses playback for buffering (with audio, pausing the endpoint does that).
-                if(!audioStarted){
-                    if(holding){
-                        if(!networkClockFrozen){networkClockFrozen=true;networkFrozenMs=nowMs();}
-                        anchor=Clock::now();anchorMs=networkFrozenMs;
-                    }else networkClockFrozen=false;
-                }
-                // Where playback is decides how far ahead the session reads and when it pauses for buffering.
-                source.setPlaybackPositionMs(nowMs());
-                if(Clock::now()>=nextNetworkPublish){nextNetworkPublish=Clock::now()+std::chrono::milliseconds(100);publishNetwork();}
-            };
             uint64_t hdrDisplayCheck=0;
             auto readSource=[&](pipeline::FramePacket& packet,const AVFrame** frame){
                 return activeSource->read(packet,frame);
@@ -1750,18 +1469,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                 diagnostics::CpuStallTrace loopTrace("engine-stall",frames,45.0,watchdog_->stage());
                 collectTimings();
                 loopTrace.mark("collect");
-                networkTick();
                 // P0 缓冲闸门：音频 5 秒没回来就不再一起等 —— 暂停并明确告诉用户重开，
                 // 而不是让画面和声音一起冻住、什么提示都没有。
                 // P0: once the sound has been gone for five seconds, stop waiting together:
                 // pause and say so, instead of freezing picture and sound in silence.
-                if(bufferingGate.gaveUp()){
-                    if(!audioGateNotified){
-                        audioGateNotified=true;
-                        status(L"音频已中断超过 5 秒，已暂停播放，请重新打开该视频", true);
-                        pause(true);
-                    }
-                }else if(audioGateNotified)audioGateNotified=false;
                 // Windows HDR flips with a newer display answer (a display or monitor
                 // change, 刷新显示器状态, a session start). Reading it calls no driver; the
                 // owner used to enumerate DXGI outputs here every 2 s (0.25-0.64 ms each).
@@ -1959,56 +1670,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                     }
                 }
                 if(stop_)break;
-                int track=-1;double trackPosition=0;
-                {std::lock_guard lock(mutex_);if(pendingAudioSession_==snapshot_.sessionId)track=pendingAudioTrack_;pendingAudioTrack_=-1;trackPosition=snapshot_.position;}
-                bool switchedAudio=false;
-                if(track>=0&&audioStarted&&track!=audioPipe.selectedTrack()){
-                    const double clock=audio.mediaTimeMs();if(std::isfinite(clock))trackPosition=clock/1000;
-                    holdFileAudio();audioPipe.stopThread();
-                    const bool changed=audioPipe.selectTrack(track);
-                    audioPipe.setPaused(paused_);audioPipe.startThread(&audio,true,std::max(0.0,trackPosition*1000));
-                    switchedAudio=true;
-                    {std::lock_guard lock(mutex_);snapshot_.selectedAudioTrack=audioPipe.selectedTrack();snapshot_.audioInputChannels=audioPipe.pcmFormat().channels;
-                        if(!changed)snapshot_.backendWarning=L"音轨切换失败，已保留原音轨";
-                        if(seekSeconds_.load()<0){snapshot_.seekTarget=trackPosition;++snapshot_.seekRequested;seekSeconds_=trackPosition;}}
-                    log::info("audio-track",std::format("requested={} selected={} changed={} positionSeconds={:.3f}",track,audioPipe.selectedTrack(),changed,trackPosition));
-                    bufferingGate.rearm(gateNow());   // 换音轨后缓冲会先清空再填，别当成断流
-                }
-                if(!isImage&&!isCapture&&playbackRate!=requestedPlaybackRate_.load()){
-                    playbackRate=requestedPlaybackRate_.load();audioPipe.setPlaybackRate(playbackRate);
-                    playbackSpeedLastWall={};cadence.reset();
-                }
                 double seek;{std::lock_guard lock(mutex_);seek=seekSeconds_.exchange(-1);if(seek>=0)activeSeekId=snapshot_.seekRequested;}
-                if (const auto session=source.sharedSession();session&&session->timeshiftEnabled()) {
-                    const bool evicted=!paused_&&session->takeTimeshiftOverrun();
-                    if (seek>=0||evicted) {
-                        const auto window=session->stats();
-                        if (window.timeshiftEndSeconds>window.timeshiftStartSeconds) {
-                            const double edge=std::max(window.timeshiftStartSeconds,
-                                window.timeshiftEndSeconds-std::max(0.25,session->plan().startSeconds));
-                            seek=evicted&&seek<0?window.timeshiftStartSeconds:std::clamp(seek,window.timeshiftStartSeconds,edge);
-                        } else seek=-1;
-                    }
-                }
-                if(seek>=0&&!isImage&&!isCapture){
-                    seekStarted=Clock::now();seekDecoded=0;
-                    holdFileAudio();fileAudioAlignPending=true;
-                    drainLivePresentation();
-                    if(!ring.drainQueue()){status(L"跳转失败",true);break;}
-                    if(!activeSource->seek({static_cast<int64_t>(seek*1000000),1000000})){
-                        const auto session=source.sharedSession();
-                        if(!session||!session->timeshiftEnabled()){status(L"跳转失败",true);break;}
-                        // The live window can lose its last keyframe at the memory cap.
-                        // Keep the receiver alive and let the next keyframe recover it.
-                        audioRebuffering=false;
-                        continue;
-                    }
-                    seekDemuxDone=Clock::now();
-                    veyra::log::info("seek-latency",std::format("request={} targetSeconds={:.3f} drainAndDemuxMs={:.3f}",activeSeekId,seek,elapsedMs(seekStarted)));
-                    initialFileFramePending=false;av_frame_free(&cachedFrame);out={};hasOutput=false;
-                    discardBefore=seek*1000;seekPreviewPending=true;reset=true;pendingResetCause=pipeline::ResetReason::Seek;anchorMs=discardBefore;anchor=Clock::now();lastAudioClockMs=discardBefore;audioClockExhausted=false;audioRebuffering=false;if(audioStarted){audioPipe.setPaused(paused_);if(!switchedAudio||std::abs(seek-trackPosition)>.001)audioPipe.requestSeek(discardBefore);}
-                    bufferingGate.rearm(gateNow());   // 跳转后同理：先清空再填
-                }
                 if(!transaction&&((paused_&&!seekPreviewPending)||(isImage&&hasOutput))){
                     // A parameter change while paused (or on a still image) only
                     // reaches the picture if the cached source frame is pushed
@@ -2077,7 +1739,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                     };
                     const auto leaseWaitStart=Clock::now();
                     while((liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending())&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){
-                        networkTick();
                         advanceLive();if(seekSeconds_>=0)break;
                         if(liveScheduler->occupancy()==0&&!graph->nextFrameSlotAvailable()&&elapsedMs(leaseWaitStart)>2000){status(L"等待输出纹理释放超时",true);stop_=true;break;}
                         if(liveScheduler->occupancy()>=2||!graph->nextFrameSlotAvailable()||enhancementPending()){
@@ -2167,7 +1828,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                     if(!sourceGapUntil){sourceGapUntil=Clock::now()+std::chrono::milliseconds(400);veyra::log::info("capture-test","inject 400ms Waiting before next source read");}
                     if(Clock::now()<*sourceGapUntil){advanceLive();publishWaitingProgress();waitLive();continue;}
                 }
-                pipeline::FramePacket pkt;const AVFrame* frame=imageFrame;
+                pipeline::FramePacket pkt;const AVFrame* frame=nullptr;
                 if(cachedFrame&&((initialRemoteFramePending||initialFileFramePending)||(transaction&&(!isCapture||paused_)))){frame=cachedFrame;pkt=cachedPacket;initialRemoteFramePending=false;initialFileFramePending=false;}
                 else if(!isImage){
                     auto rs=readSource(pkt,&frame);
@@ -2527,7 +2188,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
                         pts=nextPts;
                         ++previewSkippedTotal;++previewSkippedSinceSubmit;previewSkipSinceProcess=true;
                     }
-                    if(previewSourceFailed){status(source.errorMessage().empty()?L"视频读取或候选帧保存失败":source.errorMessage(),true);break;}
+                    if(previewSourceFailed){status(L"视频读取或候选帧保存失败",true);break;}
                 }
                 if(!retainCandidate()){status(L"无法保存解码帧，已停止播放",true);break;}
                 if(testReplayAsCard||(testArrivalJitterMs>0&&isScreen)){
@@ -3646,7 +3307,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options){
     audioPipe.stopThread();audio.shutdown();veyra::log::info("engine","teardown: audio stopped");
     ring.drainQueue();presenter->close();graph->shutdown();recentGraphCache.evict("session-close");
     veyra::log::info("engine","teardown: closing sources");
-    screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);
+    screenSource.close();av_frame_free(&cachedFrame);
     veyra::log::info("engine","teardown: sources closed");
     capturePreparation.finish(capturePreviewWindow);
     (void)coreCache.close();

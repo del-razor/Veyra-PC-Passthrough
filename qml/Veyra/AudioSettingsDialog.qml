@@ -11,64 +11,6 @@ DialogLayer {
     actions: [{ label: qsTr("完成"), primary: true }]
     onActionTriggered: dialogHost.close()
 
-    DialogSection { text: qsTr("音轨") }
-    ColumnLayout {
-        Layout.fillWidth: true
-        spacing: 6
-        Text {
-            visible: veyra.audioTracks.length === 0
-            text: qsTr("当前源没有可选音轨。")
-            color: Theme.t3
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSmall
-        }
-        Repeater {
-            model: veyra.audioTracks
-            delegate: Rectangle {
-                required property var modelData
-                Layout.fillWidth: true
-                implicitHeight: 52
-                radius: 12
-                color: Theme.card2
-                border.width: 1
-                border.color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.stroke
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
-                    spacing: 12
-                    // .trk .bars: the playing track's bars move (M39).
-                    VEqBars {
-                        objectName: "audio-track-bars-" + modelData.index
-                        active: veyra.selectedAudioTrack === modelData.index && veyra.running && !veyra.paused
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text {
-                            text: modelData.label
-                            color: Theme.t1
-                            font.family: Theme.fontUi
-                            font.pixelSize: Theme.fsBody
-                        }
-                        Text {
-                            text: modelData.channels > 0 ? modelData.channels + qsTr(" 声道") : ""
-                            color: Theme.t3
-                            font.family: Theme.fontUi
-                            font.pixelSize: 11
-                        }
-                    }
-                    VIcon {
-                        visible: veyra.selectedAudioTrack === modelData.index
-                        name: "check"
-                        color: Theme.accent
-                    }
-                }
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { onTapped: veyra.selectedAudioTrack = modelData.index }
-            }
-        }
-    }
     DialogSection { text: qsTr("输出") }
     DialogGroup {
         VRow {

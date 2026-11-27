@@ -13,7 +13,6 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     impl_->sourceLabel = label;
-    impl_->resumeSession = 0;
     impl_->screenFillActive = screenFill;
     // Honor the dialog's initial viewport before input can be taken over.
     // Later explicit aspect choices still replace this session preset.
