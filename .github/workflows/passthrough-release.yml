@@ -157,7 +157,7 @@ jobs:
       - name: Build veyra_qml_ui
         run: |
           New-Item -ItemType Directory -Force C:\logs | Out-Null
-          cmake --build C:\b --parallel --target veyra_qml_ui -- -k 0 *>&1 | Tee-Object -FilePath C:\logs\build.log | Select-Object -Last 400
+          cmake --build C:\b --parallel --target veyra_qml_ui veyra_portable_launcher -- -k 0 *>&1 | Tee-Object -FilePath C:\logs\build.log | Select-Object -Last 400
 
       - name: Download the official packages of this version
         if: github.ref_name == 'passthrough'
